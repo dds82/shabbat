@@ -339,6 +339,7 @@ def shabbatEnd() {
     sendEvent("name": "specialHoliday", "value": (nextSpecialHoliday == null ? "" : nextSpecialHoliday))
     sendEvent("name": "havdalahOnFire", "value": aish)
     shabbatEventTriggered()
+    restorePreviousManualType()
 }
 
 def havdalahMade() {
