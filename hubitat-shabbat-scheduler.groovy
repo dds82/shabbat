@@ -233,7 +233,7 @@ def scheduleNextShabbatEvent() {
 
 def schedulePendingEvent() {
     if (debugLogging) {
-        log.debug "schedulePendingEvent, ${state.nextEventType} at ${state.nextEventTime}, initializing=${state.initializing}"
+        log.debug "schedulePendingEvent, ${state.nextEventType} at ${toDateTime(state.nextEventTime)}, initializing=${state.initializing}"
     }
     
     if (state.nextEventType != null && state.nextEventTime != null) {
