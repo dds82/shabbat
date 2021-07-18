@@ -56,6 +56,7 @@ preferences
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
         input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: "Away"
         input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this many minutes", required: false, defaultValue: 60
+        input name: "preferEarly", type: "bool", title: "Prefer Early Shabbat", description: "If turned on and the time is switched to Zman, it will automatically revert to the previously selected early type after the next Shabbat ends", defaultValue: true
         input name: "makerUrl", type: "string", title: "Maker API base URL", required: false, description: "The base URL for the maker API, up to and including 'devices/'"
         input name: "accessToken", type: "string", title: "Maker API access token", required: false, description: "Access token for the maker API"
         input name: "debugLogging", type: "bool", title: "Debug Logging", defaultValue: true
@@ -357,7 +358,8 @@ def shabbatEnd() {
     sendEvent("name": "specialHoliday", "value": (nextSpecialHoliday == null ? "" : nextSpecialHoliday))
     sendEvent("name": "havdalahOnFire", "value": aish)
     shabbatEventTriggered()
-    restorePreviousManualType()
+    if (preferEarly)
+        restorePreviousManualType()
 }
 
 def havdalahMade() {
