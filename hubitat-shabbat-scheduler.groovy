@@ -50,10 +50,13 @@ preferences
     section
     {
         input name: "candlelightingoffset", type: "number", title: "Candle Lighting (minutes before sunset)", required: true, defaultValue: 18
+        input name: "earlyShabbatTime", type: "time", title: "Time for \"Early\" Shabbat", required: true, defaultValue: "19:00"
         input name: "startMode", type: "enum", title: "Mode at Shabbat Start", required:true, options: getModeOptions(), defaultValue: "Shabbat"
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
         input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: "Away"
         input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this many minutes", required: false, defaultValue: 60
+        input name: "makerUrl", type: "string", title: "Maker API base URL", required: true, description: "The base URL for the maker API, up to and including 'devices/'"
+        input name: "accessToken", type: "string", title: "Maker API access token", required: true, description: "Access token for the maker API"
         input name: "debugLogging", type: "bool", title: "Debug Logging", defaultValue: true
         input name: "logOnly", type: "bool", title: "Log Events Only (don't change modes)", defaultValue: false
     }
@@ -68,8 +71,8 @@ List<String> getModeOptions() {
 }
 
 def installed() {
+    state.initializing = true
     initialize()
-    plag()
     runIn(300, debugOff)
 }
 
@@ -87,10 +90,6 @@ def createStateMap() {
      createStateMap()
      
      schedulePendingEvent()
-     
-    Date regular = new Date(location.sunset.getTime() - (18 * 60000))
-    setRegularTime(regular.getTime())
-     
     fetchSchedule()
      
     String scheduleStr = String.format("%d %d %d 1 * ?", random.nextInt(60), random.nextInt(59) + 1, random.nextInt(6))
@@ -233,6 +232,10 @@ def scheduleNextShabbatEvent() {
 }
 
 def schedulePendingEvent() {
+    if (debugLogging) {
+        log.debug "schedulePendingEvent, ${state.nextEventType} at ${state.nextEventTime}, initializing=${state.initializing}"
+    }
+    
     if (state.nextEventType != null && state.nextEventTime != null) {
         Object nextEventTime = state.nextEventTime
         if (!(nextEventTime instanceof Date))
@@ -243,10 +246,25 @@ def schedulePendingEvent() {
                 log.debug "Not scheduling pending event because it is in the past"
             
             return
-        }        
+        }
+        
+        if (state.nextEventType == CANDLES) {
+            setRegularTime(nextEventTime.getTime())
+            if (state.initializing) {
+                state.initializing = false
+                plag()
+            }
+            
+            nextEventTime = getActiveTime()
+        }
+        
+        if (debugLogging) {
+            log.debug "schedulePendingEvent, nextEventTime is ${nextEventTime}"
+        }
         
         Calendar cal = Calendar.getInstance()
         cal.setTime(nextEventTime)
+        
         String scheduleStr = String.format("%d %d %d %d %d ? %d", cal.get(Calendar.SECOND), cal.get(Calendar.MINUTE), cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
         if (debugLogging) {
             log.debug "schedule cron string is " + scheduleStr
@@ -333,6 +351,12 @@ def shabbatEventTriggered() {
 
 def setRegularTime(long date) {
     sendEvent("name":"regularTime", "value":date)
+    def activeType = getActiveType()
+
+    updateActiveTime(activeType, regularTimeOnCalendar(date))
+}
+
+def getActiveType() {
     def activeType = device.getDataValue("activeType")
     if (activeType == null)
         activeType = device.currentValue("activeType")
@@ -340,7 +364,7 @@ def setRegularTime(long date) {
     if (activeType == null)
         activeType = "Plag"
     
-    updateActiveTime(activeType, regularTimeOnCalendar(date))
+    return activeType
 }
 
 def plag() {
@@ -382,21 +406,30 @@ def getPreviousType(key) {
 def updateActiveTime(type) {
     Calendar regular = regularTimeOnCalendar()
     updateActiveTime(type, regular, false)
+    schedulePendingEvent()
 }
 
 def updateActiveTime(type, regular, timeChanged = true) {
     int time = (regular.get(Calendar.HOUR_OF_DAY) * 100) + regular.get(Calendar.MINUTE)
     def regularTime = regular.getTimeInMillis()
+    if (debugLogging)
+        log.debug "Regular time is " + regular.getTime()
     
     // plag
     regular.add(Calendar.HOUR_OF_DAY, -1)
     def plagTime = regular.getTimeInMillis()
+    if (debugLogging)
+        log.debug "Plag time is " + regular.getTime()
     
-    // 7pm
-    regular.add(Calendar.HOUR_OF_DAY, 1)
-    regular.set(Calendar.HOUR_OF_DAY, 19)
-    regular.set(Calendar.MINUTE, 0)
+    // early
+    Calendar earlyTimeCal = Calendar.getInstance()
+    earlyTimeCal.setTime(toDateTime(earlyShabbatTime))
+    regular.set(Calendar.HOUR_OF_DAY, earlyTimeCal.get(Calendar.HOUR_OF_DAY))
+    regular.set(Calendar.MINUTE, earlyTimeCal.get(Calendar.MINUTE))
+    regular.set(Calendar.SECOND, 0)
     def earlyTime = regular.getTimeInMillis()
+    if (debugLogging)
+        log.debug "Early time is " + regular.getTime()
     
     def activeTime = null
     def prevEarlyOption = state.hasEarlyOption
@@ -439,6 +472,7 @@ def updateActiveTime(type, regular, timeChanged = true) {
         state.hasEarlyOption = earlyOption
     
     device.updateDataValue("activeType", type)
+    device.updateDataValue("activeTime", activeTime.toString())
     sendEvent("name":"activeType", "value":type)
     sendEvent("name":"activeTime", "value":activeTime)
     sendEvent("name":"earlyTime", "value":earlyTime)
@@ -446,8 +480,8 @@ def updateActiveTime(type, regular, timeChanged = true) {
     updateTimes(earlyOption, earlyTime, plagTime, regularTime, type)
 }
 
-String declareJavascriptFunction(int deviceid, String command) {
-    String url = "https://cloud.hubitat.com/api/62feb033-2cf1-437b-91ca-d9fd9150d7c5/apps/47/devices/" + deviceid + "/" + command + "?access_token=5ed1959b-931f-40c1-9e8a-e8536cc0ce48"
+String declareJavascriptFunction(deviceid, String command) {
+    String url = makerUrl + deviceid + "/" + command + "?access_token=" + accessToken
     String s = "var xhttp = new XMLHttpRequest();"
     s += "xhttp.open(\"GET\", \"" + url + "\", true);"
     s += "xhttp.send();"
@@ -455,7 +489,7 @@ String declareJavascriptFunction(int deviceid, String command) {
 }
 
 String clickableBegin(String command) {
-    return "<div style=\"padding-bottom:12px\" onclick='javascript:" + declareJavascriptFunction(780, command) + "'>"
+    return "<div style=\"padding-bottom:12px\" onclick='javascript:" + declareJavascriptFunction(device.id, command) + "'>"
 }
 
 def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regularTime, String activeType) {
@@ -520,7 +554,11 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
 }
 
 Calendar regularTimeOnCalendar() {
-    return regularTimeOnCalendar(device.currentValue("regularTime"))
+    regTime = device.currentValue("regularTime")
+    if (regTime == null)
+        log.error "Regular time is null"
+    
+    return regularTimeOnCalendar(regTime)
 }
 
 Calendar regularTimeOnCalendar(currTime) {
@@ -530,7 +568,9 @@ Calendar regularTimeOnCalendar(currTime) {
 }
 
 def push(num) {
-    log.debug "map: ${state.savedTypes}"
+    if (debugLogging)
+        log.debug "map: ${state.savedTypes}"
+    
     switch (num.toInteger()) {
         case 0:
             plag()
@@ -546,3 +586,34 @@ def push(num) {
     }
 }
     
+Date getActiveTime() {
+    Object time
+    
+    activeType = getActiveType()
+    switch (activeType) {
+        case "Regular":
+            time = device.currentValue("regularTime")
+            break
+        
+        case "Plag":
+            time = device.currentValue("plagTime")
+            break
+        
+        case "Early":
+            time = device.currentValue("earlyTime")
+            break
+    }
+    
+    if (debugLogging)
+        log.debug "Active time for ${activeType} is ${time}"
+    
+    if (time != null) {
+        if (time instanceof BigDecimal)
+            time = new Date(time.longValue())
+    
+        if (!(time instanceof Date))
+            time = toDateTime(time)
+    }
+    
+    return time
+}
