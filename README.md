@@ -3,4 +3,6 @@ Virtual device driver to schedule shabbat/yom tov and change location mode autom
 
 Also detects certain holidays which may need special treatment (e.g. lights turning off later).
 
+You must configure the Maker API to have access to this device.
+
 Configuration options should be self-explanatory.
