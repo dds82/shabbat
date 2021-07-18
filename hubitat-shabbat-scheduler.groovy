@@ -3,6 +3,7 @@ import java.math.BigDecimal
 import java.util.Date
 import java.util.Calendar
 import java.util.HashMap
+import java.util.concurrent.ConcurrentHashMap
 import java.util.Random
 import java.util.TimeZone
 import java.text.SimpleDateFormat
@@ -20,8 +21,8 @@ import java.text.SimpleDateFormat
 @Field static final String CANDLES = "candles"
 @Field static final String HAVDALAH = "havdalah"
 
-@Field List eventList = new ArrayList()
-@Field final Random random = new Random()
+@Field static final Random random = new Random()
+@Field static final Map<String, List> eventLists = new ConcurrentHashMap<>()
 
 metadata {
  	definition (name: "Shabbat and Holiday Scheduler", namespace: "shabbatmode", author: "Daniel Segall") {
@@ -83,6 +84,8 @@ def debugOff() {
 def createStateMap() {
     if (state.savedTypes == null)
          state.savedTypes = new HashMap()
+    
+    eventLists.putIfAbsent(device.id, new ArrayList())
 }
  
  def initialize() {
@@ -109,6 +112,7 @@ def updated() {
 
 def uninstalled() {
     unschedule(fetchSchedule)
+    eventLists.remove(device.id)
 }
 
 def fetchSchedule() {
@@ -159,6 +163,7 @@ def scheduleUpdater(response, data) {
         return
     }
     
+    List eventList = eventLists.get(device.id)
     eventList.clear()
     for (item in result.items) {
         if (item.category == CANDLES || item.category == HAVDALAH)
@@ -167,14 +172,19 @@ def scheduleUpdater(response, data) {
             eventList.add([type: item.category, name: item.title, when: toDateTime(item.date)])
     }
     
-    if (debugLogging)
-        log.debug eventList
+    if (debugLogging) {
+        log.debug "Events created: ${eventList}"
+    }
     
     scheduleNextShabbatEvent()
+    
+    if (debugLogging)
+        log.debug "Schedule fetch complete"
 }
 
 def scheduleNextShabbatEvent() {
     long currentTime = now()
+    List eventList = eventLists.get(device.id)
     while (!eventList.isEmpty()) {
         Map data = eventList.remove(0)
         if (debugLogging)
@@ -229,11 +239,15 @@ def scheduleNextShabbatEvent() {
             break
         }
     }
+    
+    if (debugLogging) {
+        log.debug "scheduleNextShabbatEvent Events remaining: ${eventList}"
+    }
 }
 
 def schedulePendingEvent() {
     if (debugLogging) {
-        log.debug "schedulePendingEvent, ${state.nextEventType} at ${toDateTime(state.nextEventTime)}, initializing=${state.initializing}"
+        log.debug "schedulePendingEvent, ${state.nextEventType} at ${state.nextEventTime}, initializing=${state.initializing}"
     }
     
     if (state.nextEventType != null && state.nextEventTime != null) {
@@ -276,8 +290,12 @@ def schedulePendingEvent() {
         else
             schedule(scheduleStr, shabbatEnd)
     }
-    else if (logDebug) {
+    else if (debugLogging) {
         log.debug "No pending event found"
+    }
+    
+    if (debugLogging) {
+        log.debug "schedulePendingEvent Events remaining: ${eventLists.get(device.id)}"
     }
 }
 
