@@ -55,8 +55,8 @@ preferences
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
         input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: "Away"
         input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this many minutes", required: false, defaultValue: 60
-        input name: "makerUrl", type: "string", title: "Maker API base URL", required: true, description: "The base URL for the maker API, up to and including 'devices/'"
-        input name: "accessToken", type: "string", title: "Maker API access token", required: true, description: "Access token for the maker API"
+        input name: "makerUrl", type: "string", title: "Maker API base URL", required: false, description: "The base URL for the maker API, up to and including 'devices/'"
+        input name: "accessToken", type: "string", title: "Maker API access token", required: false, description: "Access token for the maker API"
         input name: "debugLogging", type: "bool", title: "Debug Logging", defaultValue: true
         input name: "logOnly", type: "bool", title: "Log Events Only (don't change modes)", defaultValue: false
     }
@@ -489,7 +489,10 @@ String declareJavascriptFunction(deviceid, String command) {
 }
 
 String clickableBegin(String command) {
-    return "<div style=\"padding-bottom:12px\" onclick='javascript:" + declareJavascriptFunction(device.id, command) + "'>"
+    if (makerUrl != null && accessToken != null)
+        return "<div style=\"padding-bottom:12px\" onclick='javascript:" + declareJavascriptFunction(device.id, command) + "'>"
+    
+    return "<div style=\"padding-bottom:12px\">"
 }
 
 def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regularTime, String activeType) {
