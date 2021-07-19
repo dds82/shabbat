@@ -50,8 +50,8 @@ preferences
 {
     section
     {
-        input name: "candlelightingoffset", type: "number", title: "Candle Lighting (minutes before sunset)", required: true, defaultValue: 18
-        input name: "earlyShabbatTime", type: "time", title: "Time for \"Early\" Shabbat", required: true, defaultValue: "19:00"
+        input name: "candlelightingoffset", type: "number", title: "Candle Lighting", required: true, defaultValue: 18, description: "Minutes before sunset"
+        input name: "earlyShabbatTime", type: "time", title: "Time for Early Shabbat", required: true, defaultValue: "19:00", description: "The time for \"Early\" Shabbat which does not change each week"
         input name: "startMode", type: "enum", title: "Mode at Shabbat Start", required:true, options: getModeOptions(), defaultValue: "Shabbat"
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
         input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: "Away"
@@ -85,8 +85,6 @@ def debugOff() {
 def createStateMap() {
     if (state.savedTypes == null)
          state.savedTypes = new HashMap()
-    
-    eventLists.putIfAbsent(device.id, new ArrayList())
 }
  
  def initialize() {
@@ -117,6 +115,7 @@ def uninstalled() {
 }
 
 def fetchSchedule() {
+    state.expectEmptyList = false
     Calendar cal = Calendar.getInstance()
     int month = cal.get(Calendar.MONTH)
     final boolean detectChanuka = month == Calendar.NOVEMBER || month == Calendar.DECEMBER || month == Calendar.JANUARY
@@ -165,7 +164,14 @@ def scheduleUpdater(response, data) {
     }
     
     List eventList = eventLists.get(device.id)
-    eventList.clear()
+    if (eventList == null) {
+        eventList = new ArrayList()
+        eventLists.put(device.id, eventList)
+    }
+    else {
+        eventList.clear()
+    }
+    
     for (item in result.items) {
         if (item.category == CANDLES || item.category == HAVDALAH)
             eventList.add([type: item.category, when: toDateTime(item.date)])
@@ -177,7 +183,12 @@ def scheduleUpdater(response, data) {
         log.debug "Events created: ${eventList}"
     }
     
-    scheduleNextShabbatEvent()
+    if (eventList == null || eventList.isEmpty()) {
+        state.expectEmptyList = true
+    }
+    else {
+        scheduleNextShabbatEvent()
+    }
     
     if (debugLogging)
         log.debug "Schedule fetch complete"
@@ -186,6 +197,13 @@ def scheduleUpdater(response, data) {
 def scheduleNextShabbatEvent() {
     long currentTime = now()
     List eventList = eventLists.get(device.id)
+    
+    if ((eventList == null || eventList.isEmpty()) && !state.expectEmptyList) {
+        // Re-fetch
+        fetchSchedule()
+        return
+    }
+    
     while (!eventList.isEmpty()) {
         Map data = eventList.remove(0)
         if (debugLogging)
@@ -244,6 +262,10 @@ def scheduleNextShabbatEvent() {
     if (debugLogging) {
         log.debug "scheduleNextShabbatEvent Events remaining: ${eventList}"
     }
+    
+    if (eventList == null || eventList.isEmpty()) {
+        state.expectEmptyList = true
+    }
 }
 
 def schedulePendingEvent() {
@@ -295,8 +317,14 @@ def schedulePendingEvent() {
         log.debug "No pending event found"
     }
     
+    List eventList = eventLists.get(device.id)
     if (debugLogging) {
-        log.debug "schedulePendingEvent Events remaining: ${eventLists.get(device.id)}"
+        log.debug "schedulePendingEvent Events remaining: ${eventList}"
+    }
+    
+    if ((eventList == null || eventList.isEmpty()) && !state.expectEmptyList) {
+        // Re-fetch
+        fetchSchedule()
     }
 }
 
@@ -452,6 +480,8 @@ def updateActiveTime(type, regular, timeChanged = true) {
     if (debugLogging)
         log.debug "Early time is " + regular.getTime()
     
+    int earlyTimeCode = (regular.get(Calendar.HOUR_OF_DAY) * 100) + regular.get(Calendar.MINUTE)
+    
     def activeTime = null
     def prevEarlyOption = state.hasEarlyOption
     
@@ -459,7 +489,12 @@ def updateActiveTime(type, regular, timeChanged = true) {
         saveType(MANUAL_EARLY, type)
     }
     
-    boolean earlyOption = time >= 1850
+    int codeDiff = earlyTimeCode - time
+    if (debugLogging) {
+        log.debug "codeDiff=${codeDiff}"
+    }
+    
+    boolean earlyOption = codeDiff <= 10
     if (earlyOption) {
         if (timeChanged && prevEarlyOption != null && prevEarlyOption.booleanValue() != earlyOption) {
             type = getPreviousType(SEASONAL)
