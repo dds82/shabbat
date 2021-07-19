@@ -3,6 +3,7 @@ import java.math.BigDecimal
 import java.util.Date
 import java.util.Calendar
 import java.util.HashMap
+import java.util.HashSet
 import java.util.concurrent.ConcurrentHashMap
 import java.util.Random
 import java.util.TimeZone
@@ -23,6 +24,9 @@ import java.text.SimpleDateFormat
 
 @Field static final Random random = new Random()
 @Field static final Map<String, List> eventLists = new ConcurrentHashMap<>()
+
+@Field static final Set fetchInProgress = new HashSet<>()
+@Field static final Set needsRefresh = new HashSet<>()
 
 metadata {
  	definition (name: "Shabbat and Holiday Scheduler", namespace: "shabbatmode", author: "Daniel Segall") {
@@ -115,6 +119,16 @@ def uninstalled() {
 }
 
 def fetchSchedule() {
+    synchronized (fetchInProgress) {
+        if (!fetchInProgress.add(device.id)) {
+            needsRefresh.add(device.id)
+            if (debugLogging)
+                log.debug "Deferring fetch because fetch already in progress"
+            
+            return
+        }
+    }
+    
     state.expectEmptyList = false
     Calendar cal = Calendar.getInstance()
     int month = cal.get(Calendar.MONTH)
@@ -149,51 +163,67 @@ def fetchSchedule() {
 }
 
 def scheduleUpdater(response, data) {
-    if (response.getStatus() != 200) {
-        log.error response.getErrorData()
-        state.expectEmptyList = true
-        return
-    }
+    try {
+        if (response.getStatus() != 200) {
+            log.error response.getErrorData()
+            state.expectEmptyList = true
+            return
+        }
     
-    result = parseJson(response.getData())
-    if (debugLogging)
-        log.debug "Response: " + result.items
+        result = parseJson(response.getData())
+        if (debugLogging)
+            log.debug "Response: " + result.items
     
-    if (result.items.length == 0) {
-        log.error "Schedule query returned no data"
-        state.expectEmptyList = true
-        return
-    }
+        if (result.items.length == 0) {
+            log.error "Schedule query returned no data"
+            state.expectEmptyList = true
+            return
+        }
     
-    List eventList = eventLists.get(device.id)
-    if (eventList == null) {
-        eventList = new ArrayList()
-        eventLists.put(device.id, eventList)
-    }
-    else {
-        eventList.clear()
-    }
+        List eventList = eventLists.get(device.id)
+        if (eventList == null) {
+            eventList = new ArrayList()
+            eventLists.put(device.id, eventList)
+        }
+        else {
+            eventList.clear()
+        }
     
-    for (item in result.items) {
-        if (item.category == CANDLES || item.category == HAVDALAH)
-            eventList.add([type: item.category, when: toDateTime(item.date)])
-        else if (item.category == HOLIDAY && (item.title.contains("Erev") || item.title == SHMINI_ATZERET))
-            eventList.add([type: item.category, name: item.title, when: toDateTime(item.date)])
-    }
+        for (item in result.items) {
+            if (item.category == CANDLES || item.category == HAVDALAH)
+                eventList.add([type: item.category, when: toDateTime(item.date)])
+            else if (item.category == HOLIDAY && (item.title.contains("Erev") || item.title == SHMINI_ATZERET))
+                eventList.add([type: item.category, name: item.title, when: toDateTime(item.date)])
+        }
     
-    if (debugLogging) {
-        log.debug "Events created: ${eventList}"
-    }
+        if (debugLogging) {
+            log.debug "Events created: ${eventList}"
+        }
     
-    if (eventList == null || eventList.isEmpty()) {
-        state.expectEmptyList = true
-    }
-    else {
-        scheduleNextShabbatEvent()
-    }
+        if (eventList == null || eventList.isEmpty()) {
+            state.expectEmptyList = true
+        }
+        else {
+            scheduleNextShabbatEvent()
+        }
     
-    if (debugLogging)
-        log.debug "Schedule fetch complete"
+        if (debugLogging)
+            log.debug "Schedule fetch complete"
+        }
+    finally {
+        boolean rerun = false
+        synchronized (fetchInProgress) {
+            fetchInProgress.remove(device.id)
+            rerun = needsRefresh.remove(device.id)
+        }
+        
+        if (rerun) {
+            if (debugLogging)
+                log.debug "Needs to re-execute fetch"
+            
+            runIn(1, fetchSchedule)
+        }
+    }
 }
 
 def scheduleNextShabbatEvent() {
