@@ -223,10 +223,11 @@ def scheduleNextShabbatEvent() {
             log.debug "Current event type is " + currentEventType
         
         if (currentEventType == "holiday") {
+            saveCurrentType(HOLIDAY, true)
+            regular()
+            
             if (data.title.contains(SHAVUOT)) {
                 state.specialHoliday = SHAVUOT
-                saveCurrentType(SHAVUOT)
-                regular()
             }
             else if (data.title.contains(PESACH)) {
                 state.specialHoliday = PESACH
@@ -242,17 +243,17 @@ def scheduleNextShabbatEvent() {
             }
         }
         else {
-            Calendar cal = Calendar.getInstance()
-            cal.setTime(data.when)
             String type = data.type
+            // This code was for an old HebCal bug where they didn't report Havdalah events on Chanuka.  That seems to be resolved
+            /*Calendar cal = Calendar.getInstance()
+            cal.setTime(data.when)
             
             int month = cal.get(Calendar.MONTH)
             final boolean detectChanuka = month == Calendar.NOVEMBER || month == Calendar.DECEMBER || month == Calendar.JANUARY
             
-            // HebCal doesn't report Havdalah on Chanuka
             if (detectChanuka && cal.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY && type == CANDLES) {
                 type = HAVDALAH
-            }
+            }*/
             
             state.nextEventType = type
             state.nextEventTime = data.when
@@ -361,9 +362,7 @@ def shabbatEnd() {
         if (!logOnly) {
             location.setMode(endMode)
         
-            if (state.specialHoliday == SHAVUOT) {
-                restorePreviousType(SHAVUOT)
-            }
+            restorePreviousType(HOLIDAY, true)
         
             if (state.specialHoliday != SUKKOT) {
                 nextSpecialHoliday = null
@@ -387,9 +386,10 @@ def shabbatEnd() {
     state.specialHoliday = nextSpecialHoliday
     sendEvent("name": "specialHoliday", "value": (nextSpecialHoliday == null ? "" : nextSpecialHoliday))
     sendEvent("name": "havdalahOnFire", "value": aish)
-    shabbatEventTriggered()
     if (preferEarly)
         restorePreviousManualType()
+    
+    shabbatEventTriggered()
 }
 
 def havdalahMade() {
@@ -430,19 +430,23 @@ def early() {
     updateActiveTime("Early")
 }
 
-def saveCurrentType(key) {
-    saveType(key, device.currentValue("activeType"))
+def saveCurrentType(key, onlyIfNotSet=false) {
+    saveType(key, device.currentValue("activeType"), onlyIfNotSet)
 }
 
-def saveType(key, type) {
+def saveType(key, type, onlyIfNotSet=false) {
     createStateMap()
-    state.savedTypes[key] = type
+    if (!onlyIfNotSet || state.savedTypes[key] == null)
+        state.savedTypes[key] = type
 }
 
-def restorePreviousType(key) {
+def restorePreviousType(key, remove=false) {
     def type = getPreviousType(key)
     if (type)
         updateActiveTime(type)
+    
+    if (remove)
+        removePreviousType(key)
 }
 
 def restorePreviousManualType() {
@@ -452,6 +456,11 @@ def restorePreviousManualType() {
 def getPreviousType(key) {
     createStateMap()
     return state.savedTypes[key]
+}
+
+def removePreviousType(key) {
+    createStateMap()
+    state.savedTypes[key] = null
 }
 
 def updateActiveTime(type) {
