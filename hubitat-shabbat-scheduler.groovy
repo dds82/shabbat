@@ -51,6 +51,7 @@ metadata {
         command "plag"
         command "early"
         command "havdalahMade"
+        command "testEvent", [[name:"Type*", type:"ENUM", constraints: [CANDLES,HAVDALAH]], [name:"Delay", type:"NUMBER", description:"How long from, in seconds, from when the testEvent button is pushed to schedule this event"]]
      }
  }
 
@@ -122,7 +123,11 @@ def uninstalled() {
     eventLists.remove(device.id)
 }
 
-def fetchSchedule() {
+def testEvent(String eventType, BigDecimal delay) {
+    fetchSchedule(eventType, delay.intValue())
+}
+
+def fetchSchedule(String testEventType=null, int testEventDelay=-1) {
     synchronized (fetchInProgress) {
         if (!fetchInProgress.add(device.id)) {
             needsRefresh.add(device.id)
@@ -163,7 +168,7 @@ def fetchSchedule() {
     if (debugLogging)
         log.debug "url is " + url
     
-    asynchttpGet(scheduleUpdater, [uri : url])
+    asynchttpGet(scheduleUpdater, [uri : url], [test: testEventType, delay: testEventDelay])
 }
 
 def scheduleUpdater(response, data) {
@@ -199,6 +204,14 @@ def scheduleUpdater(response, data) {
             else if (item.category == HOLIDAY && (item.title.contains("Erev") || item.title == SHMINI_ATZERET))
                 eventList.add([type: item.category, name: item.title, when: toDateTime(item.date)])
         }
+        
+        if (data["test"] != null) {
+            if (debugLogging) {
+                log.debug "Adding test event ${data["test"]}"
+            }
+            
+            eventList.add(0, [isTest: true, type: data["test"], name: "Test " + data["test"], when: new Date(now() + (1000 * data["delay"]))])
+        }
     
         if (debugLogging) {
             log.debug "Events created: ${eventList}"
@@ -231,6 +244,7 @@ def scheduleUpdater(response, data) {
 }
 
 def scheduleNextShabbatEvent() {
+    state.nextEventTest=false
     long currentTime = now()
     List eventList = eventLists.get(device.id)
     
@@ -291,6 +305,9 @@ def scheduleNextShabbatEvent() {
             
             state.nextEventType = type
             state.nextEventTime = data.when
+            if (data.isTest)
+                state.nextEventTest = true
+            
             schedulePendingEvent()
             break
         }
@@ -307,7 +324,7 @@ def scheduleNextShabbatEvent() {
 
 def schedulePendingEvent() {
     if (debugLogging) {
-        log.debug "schedulePendingEvent, ${state.nextEventType} at ${state.nextEventTime}, initializing=${state.initializing}"
+        log.debug "schedulePendingEvent, ${state.nextEventType} at ${state.nextEventTime}, initializing=${state.initializing}, isTest=${state.nextEventTest}"
     }
     
     if (state.nextEventType != null && state.nextEventTime != null) {
@@ -340,15 +357,20 @@ def schedulePendingEvent() {
         cal.setTime(nextEventTime)
         
         String scheduleStr = String.format("%d %d %d %d %d ? %d", cal.get(Calendar.SECOND), cal.get(Calendar.MINUTE), cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
+        
+        Map extraData =[:]
+        if (state.nextEventTest)
+            extraData["test"] = true
+        
         if (debugLogging) {
-            log.debug "schedule cron string is " + scheduleStr
-            log.debug "next event is " + state.nextEventType + " at " + nextEventTime + ", holiday=" + state.specialHoliday
+            log.debug "schedule cron string is ${scheduleStr}"
+            log.debug "next event is ${state.nextEventType} at ${nextEventTime}, holiday=${state.specialHoliday} with extraData=${extraData}"
         }
         
         if (state.nextEventType == CANDLES)
-            schedule(scheduleStr, shabbatStart)
+            schedule(scheduleStr, shabbatStart, [data: extraData])
         else
-            schedule(scheduleStr, shabbatEnd)
+            schedule(scheduleStr, shabbatEnd, [data: extraData])
     }
     else if (debugLogging) {
         log.debug "No pending event found"
@@ -365,14 +387,22 @@ def schedulePendingEvent() {
     }
 }
 
-def shabbatStart() {
+def shabbatStart(data) {
+    Object isTest = data["test"]
+    if (isTest == null)
+        isTest = false
+    else
+        isTest = isTest.toString().toBoolean()
+    
     if (notWhen != null && location.getMode() != notWhen) {
         if (location.getMode() != startMode) {
-            log.info "shabbatStart setting mode to " + startMode + ", holiday=" + state.specialHoliday
-            if (!logOnly) {
+            log.info "shabbatStart setting mode to ${startMode}, holiday=${state.specialHoliday}, isTest=${isTest}, data=${data}"
+            if (!logOnly && !isTest) {
                 location.setMode(startMode)
                 sendEvent("name": "specialHoliday", value: (state.specialHoliday == null ? "" : state.specialHoliday))
             }
+            else
+                log.info "Log only, not doing anything"
             
             state.processedStartEvent = true
         }
@@ -385,15 +415,22 @@ def shabbatStart() {
     shabbatEventTriggered()
 }
 
-def shabbatEnd() {
+def shabbatEnd(data) {
+    Object isTest = data["test"]
+    if (isTest == null)
+        isTest = false
+    else
+        isTest = isTest.toString().toBoolean()
+    
+    log.info "shabbatEnd isTest=${isTest}, data=${data}"
     String nextSpecialHoliday = state.specialHoliday
     String aish = HAVDALAH_NO_FIRE
-    if (state.processedStartEvent || logOnly) {
+    if (state.processedStartEvent || logOnly || isTest) {
         state.processedStartEvent = false
         
         log.info "shabbatEnd setting mode to " + endMode
         
-        if (!logOnly) {
+        if (!logOnly && !isTest) {
             location.setMode(endMode)
         
             restorePreviousType(HOLIDAY, true)
@@ -402,11 +439,14 @@ def shabbatEnd() {
                 nextSpecialHoliday = null
             }
         }
+        else
+            log.info "Log only, not doing anything"
         
         Calendar cal = Calendar.getInstance()
         if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
             log.info "Need havdalah on fire..."
-            if (logOnly) {
+            if (logOnly || isTest) {
+                log.info "Log only, not doing anything"
                 aish = HAVDALAH_NONE
             }
             else {
@@ -577,6 +617,8 @@ def updateActiveTime(type, regular, timeChanged = true) {
     
     device.updateDataValue("activeType", type)
     device.updateDataValue("activeTime", activeTime.toString())
+    device.updateDataValue("earlyTime", earlyTime.toString())
+    device.updateDataValue("plagTime", plagTime.toString())
     sendEvent("name":"activeType", "value":type)
     sendEvent("name":"activeTime", "value":activeTime)
     sendEvent("name":"earlyTime", "value":earlyTime)
@@ -699,15 +741,24 @@ Date getActiveTime() {
     activeType = getActiveType()
     switch (activeType) {
         case "Regular":
-            time = device.currentValue("regularTime")
+            time = device.getDataValue("regularTime")
+            if (time == null)
+                time = device.currentValue("regularTime")
+        
             break
         
         case "Plag":
-            time = device.currentValue("plagTime")
+            time = device.getDataValue("plagTime")
+            if (time == null)
+                time = device.currentValue("plagTime")
+        
             break
         
         case "Early":
-            time = device.currentValue("earlyTime")
+            time = device.getDataValue("earlyTime")
+            if (time == null)
+                time = device.currentValue("earlyTime")
+        
             break
     }
     
@@ -717,6 +768,10 @@ Date getActiveTime() {
     if (time != null) {
         if (time instanceof BigDecimal)
             time = new Date(time.longValue())
+        else if (time instanceof Number)
+            time = new Date(time.longValue())
+        else if (time instanceof String)
+            time = new Date(Long.parseLong(time))
     
         if (!(time instanceof Date))
             time = toDateTime(time)
