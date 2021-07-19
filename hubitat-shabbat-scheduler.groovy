@@ -151,6 +151,7 @@ def fetchSchedule() {
 def scheduleUpdater(response, data) {
     if (response.getStatus() != 200) {
         log.error response.getErrorData()
+        state.expectEmptyList = true
         return
     }
     
@@ -160,6 +161,7 @@ def scheduleUpdater(response, data) {
     
     if (result.items.length == 0) {
         log.error "Schedule query returned no data"
+        state.expectEmptyList = true
         return
     }
     
