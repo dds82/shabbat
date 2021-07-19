@@ -19,6 +19,6 @@ regularTime - the time for the current Zman shabbat
 activeTime - which of the previous three times will trigger the change to Shabbat mode
 activeType - which type of Shabbat is currently active. Values: Plag, Early, Regular
 havdalah - what type of Havdalah is currently required. Values: None, Fire, No Fire.  This state is updated when Shabbat/Yom Tov ends and is set to "None" after a configured time (default 60 minutes).  You may also set it to "None" manually by using the havdalahMade() command.
-specialHoliday - which holiday it currently is that may require special treatment (if any). Values (if set): Pesach, Shavuot, Sukkot, Yom Kippur, Shmini Atzeret
+specialHoliday - which holiday it currently is that may require special treatment (if any). Values (if set): Pesach, Shavuot, Sukkot, Yom Kippur
 
 All times are in milliseconds since the epoch. Times do not update for the following week until Shabbat ends.
