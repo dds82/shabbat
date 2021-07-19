@@ -406,7 +406,10 @@ def shabbatEnd() {
         Calendar cal = Calendar.getInstance()
         if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
             log.info "Need havdalah on fire..."
-            if (!logOnly) {
+            if (logOnly) {
+                aish = HAVDALAH_NONE
+            }
+            else {
                 aish = HAVDALAH_FIRE
                 if (ignoreHavdalahOnFireAfter != null && ignoreHavdalahOnFireAfter > 0)
                     runIn(ignoreHavdalahOnFireAfter * 60, havdalahMade)
