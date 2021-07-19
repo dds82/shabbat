@@ -64,7 +64,7 @@ preferences
         input name: "startMode", type: "enum", title: "Mode at Shabbat Start", required:true, options: getModeOptions(), defaultValue: "Shabbat"
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
         input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: "Away"
-        input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this many minutes", required: false, defaultValue: 60
+        input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this much time", required: false, defaultValue: 60, description: "Enter minutes, or 0 to disable this feature"
         input name: "preferEarly", type: "bool", title: "Prefer Early Shabbat", description: "If turned on and the time is switched to Zman, it will automatically revert to the previously selected early type after the next Shabbat ends", defaultValue: true
         input name: "makerUrl", type: "string", title: "Maker API base URL", required: false, description: "The base URL for the maker API, up to and including 'devices/'"
         input name: "accessToken", type: "string", title: "Maker API access token", required: false, description: "Access token for the maker API"
@@ -124,7 +124,19 @@ def uninstalled() {
 }
 
 def testEvent(String eventType, BigDecimal delay) {
-    fetchSchedule(eventType, delay.intValue())
+    List eventList = eventLists.get(device.id)
+    if (eventList != null && state.nextEventTest) {
+        for (int i = 0; i < eventList.size(); i++) {
+            def event = eventList.get(i)
+            if (!event.isTest) {
+                eventList.add(i, [isTest: true, type: eventType, name: "Test " + eventType, when: new Date(now() + (1000 * delay.longValue()))])
+                if (debugLogging) log.debug "eventList is ${eventList}"
+                return
+            }
+        }
+    }
+    else
+        fetchSchedule(eventType, delay.intValue())
 }
 
 def fetchSchedule(String testEventType=null, int testEventDelay=-1) {
