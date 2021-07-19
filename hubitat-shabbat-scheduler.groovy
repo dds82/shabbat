@@ -46,7 +46,7 @@ metadata {
         attribute "times", "string"
         attribute "activeType", "enum", ["Regular", "Plag", "Early"]
         attribute "havdalah", "enum", ["None", "Fire", "No Fire"]
-        attribute "specialHoliday", "enum", ["", PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]
+        attribute "specialHoliday", "enum", ["", PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR]
         command "regular"
         command "plag"
         command "early"
