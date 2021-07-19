@@ -51,7 +51,7 @@ metadata {
         command "plag"
         command "early"
         command "havdalahMade"
-        command "testEvent", [[name:"Type*", type:"ENUM", constraints: [CANDLES,HAVDALAH]], [name:"Delay", type:"NUMBER", description:"How long from, in seconds, from when the testEvent button is pushed to schedule this event"]]
+        command "testEvent", [[name:"Type*", type:"ENUM", constraints: [CANDLES,HAVDALAH]], [name:"Delay*", type:"NUMBER", description:"How long from, in seconds, from when the testEvent button is pushed to schedule this event"]]
      }
  }
 
