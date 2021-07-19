@@ -1,4 +1,4 @@
-# shabbat
+# Shabbat and Holiday Scheduler
 Virtual device driver to schedule shabbat/yom tov start and end events and change location mode automatically.  Provides options for Plag, constant time early shabbat (with configurable time), and Zman.  Also detects certain holidays which may need special treatment (e.g. lights staying on longer).
 
 Required setup: 2 location modes configured, one for normal operation and one Shabbat mode.  By default, the device uses "Home" as the normal mode and "Shabbat" as the Shabbat mode.
