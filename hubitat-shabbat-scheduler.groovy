@@ -22,6 +22,10 @@ import java.text.SimpleDateFormat
 @Field static final String CANDLES = "candles"
 @Field static final String HAVDALAH = "havdalah"
 
+@Field static final String HAVDALAH_NONE = "None"
+@Field static final String HAVDALAH_FIRE = "Fire"
+@Field static final String HAVDALAH_NO_FIRE = "No Fire"
+
 @Field static final Random random = new Random()
 @Field static final Map<String, List> eventLists = new ConcurrentHashMap<>()
 
@@ -41,7 +45,7 @@ metadata {
         attribute "activeTime", "number"
         attribute "times", "string"
         attribute "activeType", "enum", ["Regular", "Plag", "Early"]
-        attribute "havdalahOnFire", "enum", ["true", "false"]
+        attribute "havdalah", "enum", ["None", "Fire", "No Fire"]
         attribute "specialHoliday", "enum", ["", PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]
         command "regular"
         command "plag"
@@ -383,7 +387,7 @@ def shabbatStart() {
 
 def shabbatEnd() {
     String nextSpecialHoliday = state.specialHoliday
-    String aish = "false"
+    String aish = HAVDALAH_NO_FIRE
     if (state.processedStartEvent || logOnly) {
         state.processedStartEvent = false
         
@@ -403,7 +407,7 @@ def shabbatEnd() {
         if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
             log.info "Need havdalah on fire..."
             if (!logOnly) {
-                aish = "true"
+                aish = HAVDALAH_FIRE
                 if (ignoreHavdalahOnFireAfter != null && ignoreHavdalahOnFireAfter > 0)
                     runIn(ignoreHavdalahOnFireAfter * 60, havdalahMade)
             }
@@ -415,7 +419,7 @@ def shabbatEnd() {
     
     state.specialHoliday = nextSpecialHoliday
     sendEvent("name": "specialHoliday", "value": (nextSpecialHoliday == null ? "" : nextSpecialHoliday))
-    sendEvent("name": "havdalahOnFire", "value": aish)
+    sendEvent("name": "havdalah", "value": aish)
     if (preferEarly)
         restorePreviousManualType()
     
@@ -423,7 +427,7 @@ def shabbatEnd() {
 }
 
 def havdalahMade() {
-    sendEvent("name": "havdalahOnFire", "value": false)
+    sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
 }
 
 def shabbatEventTriggered() {
