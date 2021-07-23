@@ -396,13 +396,13 @@ def schedulePendingEvent() {
                 speakTime.setTime(nextEventTime)
                 speakTime.set(Calendar.SECOND, 0)
                 speakTime.set(Calendar.MINUTE, 0)
-                speakTime.set(Calendar.HOUR, 0)
+                speakTime.set(Calendar.HOUR_OF_DAY, 0)
+                extraData["when"] = nextEventTime
                 if (now() >= speakTime.getTimeInMillis()) {
-                    updateSpeakText()
+                    updateSpeakText(extraData)
                 }
                 else {
                     String textUpdateSchedule = String.format("%d %d %d %d %d ? %d", 0, 0, 0, cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
-                    extraData["when"] = nextEventTime
                     schedule(textUpdateSchedule, updateSpeakText, [data: extraData])
                 }
             }
@@ -427,7 +427,7 @@ def schedulePendingEvent() {
 
 def updateSpeakText(data) {
     SimpleDateFormat sdf = new SimpleDateFormat("h:mm a")
-    String text = String.format("Candle lighting today is at %s", sdf.format(data["when"]))
+    String text = String.format("Candle lighting today is at %s", sdf.format((Date)data["when"]))
     sendEvent("name": "candleLightingSpeakText", "value": text)
 }
 
