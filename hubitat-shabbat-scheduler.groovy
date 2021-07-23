@@ -60,7 +60,8 @@ preferences
 {
     section
     {
-        input name: "candlelightingoffset", type: "number", title: "Candle Lighting", required: true, defaultValue: 18, description: "Minutes before sunset"
+        input name: "candlelightingoffset", type: "number", title: "Candle Lighting", required: true, defaultValue: 18, description: "Zman candle lighting, minutes before sunset"
+        input name: "plagoffset", type: "number", title: "Plag Offset", required: true, defaultValue: 60, description: "Plag candle lighting, minutes before Zman candle lighting"
         input name: "earlyShabbatTime", type: "time", title: "Time for Early Shabbat", required: true, defaultValue: "19:00", description: "The time for \"Early\" Shabbat which does not change each week"
         input name: "startMode", type: "enum", title: "Mode at Shabbat Start", required:true, options: getModeOptions(), defaultValue: "Shabbat"
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
@@ -598,7 +599,7 @@ def updateActiveTime(type, regular, timeChanged = true) {
         log.debug "Regular time is " + regular.getTime()
     
     // plag
-    regular.add(Calendar.HOUR_OF_DAY, -1)
+    regular.add(Calendar.MINUTE, -plagoffset.intValue())
     def plagTime = regular.getTimeInMillis()
     if (debugLogging)
         log.debug "Plag time is " + regular.getTime()
