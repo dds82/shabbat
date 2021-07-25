@@ -71,6 +71,7 @@ preferences
         input name: "makerUrl", type: "string", title: "Maker API base URL", required: false, description: "The base URL for the maker API, up to and including 'devices/'"
         input name: "accessToken", type: "string", title: "Maker API access token", required: false, description: "Access token for the maker API"
         input name: "debugLogging", type: "bool", title: "Debug Logging", defaultValue: true
+        input name: "refreshOnSave", type: "bool", title: "Refresh on Save", required: false, description: "If you don't know what this does, leave it turned ON", defaultValue: true
     }
 }
 
@@ -142,7 +143,8 @@ def configure() {
 }
 
 def updated() {
-     initialize()
+    if (refreshOnSave)
+        initialize()
  }
 
 def uninstalled() {
