@@ -22,7 +22,6 @@ import java.text.SimpleDateFormat
 @Field static final String CANDLES = "candles"
 @Field static final String HAVDALAH = "havdalah"
 
-@Field static final String HAVDALAH_NONE = "None"
 @Field static final String HAVDALAH_FIRE = "Fire"
 @Field static final String HAVDALAH_NO_FIRE = "No Fire"
 
@@ -52,7 +51,8 @@ metadata {
         command "plag"
         command "early"
         command "havdalahMade"
-        command "testEvent", [[name:"Type*", type:"ENUM", constraints: [CANDLES,HAVDALAH]], [name:"Delay*", type:"NUMBER", description:"How long from, in seconds, from when the testEvent button is pushed to schedule this event"]]
+        command "unscheduleAllEvents"
+        command "testEvent", [[name:"Type*", type:"ENUM", constraints: [CANDLES,HAVDALAH,HOLIDAY]], [name:"Delay*", type:"NUMBER", description:"How long from, in seconds, from when the testEvent button is pushed to schedule this event"], [name:"Holiday", type:"ENUM", constraints:[PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]]]
      }
  }
 
@@ -71,7 +71,6 @@ preferences
         input name: "makerUrl", type: "string", title: "Maker API base URL", required: false, description: "The base URL for the maker API, up to and including 'devices/'"
         input name: "accessToken", type: "string", title: "Maker API access token", required: false, description: "Access token for the maker API"
         input name: "debugLogging", type: "bool", title: "Debug Logging", defaultValue: true
-        input name: "logOnly", type: "bool", title: "Log Events Only (don't change modes)", defaultValue: false
     }
 }
 
@@ -84,8 +83,7 @@ List<String> getModeOptions() {
 }
 
 def installed() {
-    state.initializing = true
-    initialize()
+    fullReset()
     runIn(300, debugOff)
 }
 
@@ -101,17 +99,43 @@ def createStateMap() {
  def initialize() {
      doUnschedule()
      createStateMap()
-     sendEvent("name": "candleLightingSpeakText", "value": "")
+     device.deleteCurrentState("candleLightingSpeakText")
      
      schedulePendingEvent()
     fetchSchedule()
-     
+ }
+
+def scheduleFetchTask() {     
     String scheduleStr = String.format("%d %d %d 1 * ?", random.nextInt(60), random.nextInt(59) + 1, random.nextInt(6))
      if (debugLogging)
          log.debug "schedule fetcher cron string is " + scheduleStr
      
      schedule(scheduleStr, fetchSchedule, [overwrite: true])
  }
+
+def refresh() {
+    fullReset()
+}
+
+def unscheduleAllEvents() {
+    doUnschedule()
+    List eventList = eventLists.get(device.id)
+    if (eventList != null)
+        eventList.clear()
+    
+    if (debugLogging) {
+        log.debug "unscheduleAllEvents event list is now ${eventList}"
+    }
+}
+
+def fullReset() {
+    log.info "fullReset"
+    device.deleteCurrentState("specialHoliday")
+    device.deleteCurrentState("havdalah")
+    state.initializing = true
+    state.specialHoliday = null
+    initialize()
+}
 
 def configure() {
     initialize()
@@ -131,25 +155,33 @@ def doUnschedule() {
     unschedule(updateSpeakText)
     unschedule(shabbatStart)
     unschedule(shabbatEnd)
+    unschedule(havdalahMade)
 }
 
-def testEvent(String eventType, BigDecimal delay) {
+def testEvent(String eventType, BigDecimal delay, String holiday) {
+    log.info "Received test request: eventType=${eventType}, delay=${delay}, holiday=${holiday}"
     List eventList = eventLists.get(device.id)
     if (eventList != null && state.nextEventTest) {
         for (int i = 0; i < eventList.size(); i++) {
             def event = eventList.get(i)
             if (!event.isTest) {
-                eventList.add(i, [isTest: true, type: eventType, name: "Test " + eventType, when: new Date(now() + (1000 * delay.longValue()))])
+                eventList.add(i, [isTest: true, type: eventType, name: (eventType == HOLIDAY ? "Erev " + holiday : eventType), when: new Date(now() + (1000 * delay.longValue()))])
                 if (debugLogging) log.debug "eventList is ${eventList}"
                 return
             }
         }
     }
-    else
-        fetchSchedule(eventType, delay.intValue())
+    else {
+        doUnschedule()
+        fetchSchedule(eventType, delay.intValue(), holiday)
+    }
 }
 
-def fetchSchedule(String testEventType=null, int testEventDelay=-1) {
+def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testHoliday=null) {
+    if (debugLogging) {
+        log.debug "fetchSchedule testEventType=${testEventType}"
+    }
+    
     synchronized (fetchInProgress) {
         if (!fetchInProgress.add(device.id)) {
             needsRefresh.add(device.id)
@@ -190,7 +222,8 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1) {
     if (debugLogging)
         log.debug "url is " + url
     
-    asynchttpGet(scheduleUpdater, [uri : url], [test: testEventType, delay: testEventDelay])
+    Map data = [test: testEventType, delay: testEventDelay, holiday: testHoliday]
+    httpGet(url, {response -> scheduleUpdater(response, data)})
 }
 
 def scheduleUpdater(response, data) {
@@ -201,7 +234,7 @@ def scheduleUpdater(response, data) {
             return
         }
     
-        result = parseJson(response.getData())
+        result = response.getData()
         if (debugLogging)
             log.debug "Response: " + result.items
     
@@ -228,11 +261,14 @@ def scheduleUpdater(response, data) {
         }
         
         if (data["test"] != null) {
+            String eventType = data["test"]
+            String holiday = data["holiday"]
+            
             if (debugLogging) {
-                log.debug "Adding test event ${data["test"]}"
+                log.debug "Adding test event ${eventType} ${holiday} ${data}"
             }
             
-            eventList.add(0, [isTest: true, type: data["test"], name: "Test " + data["test"], when: new Date(now() + (1000 * data["delay"]))])
+            eventList.add(0, [isTest: true, type: eventType, name: (eventType == HOLIDAY ? "Erev " + holiday : eventType), when: new Date(now() + (1000 * data["delay"]))])
         }
     
         if (debugLogging) {
@@ -262,6 +298,8 @@ def scheduleUpdater(response, data) {
             
             runIn(1, fetchSchedule)
         }
+        else
+            scheduleFetchTask()
     }
 }
 
@@ -270,9 +308,17 @@ def scheduleNextShabbatEvent() {
     long currentTime = now()
     List eventList = eventLists.get(device.id)
     
-    if ((eventList == null || eventList.isEmpty()) && !state.expectEmptyList) {
-        // Re-fetch
-        fetchSchedule()
+    if ((eventList == null || eventList.isEmpty())) {
+        if (!state.expectEmptyList) {
+            // Re-fetch
+            fetchSchedule()
+        }
+        else {
+            state.specialHoliday = null
+            state.nextEventType = null
+            state.nextEventTime = null
+        }
+        
         return
     }
     
@@ -281,7 +327,7 @@ def scheduleNextShabbatEvent() {
         if (debugLogging)
             log.debug "Current event data is " + data
         
-        if (data.when.getTime() < currentTime) {
+        if (data.when.getTime() < currentTime && !data["isTest"]) {
             if (debugLogging)
                 log.debug "Skipping current event data because it is in the past"
             
@@ -296,19 +342,19 @@ def scheduleNextShabbatEvent() {
             saveCurrentType(HOLIDAY, true)
             regular()
             
-            if (data.title.contains(SHAVUOT)) {
+            if (data.name.contains(SHAVUOT)) {
                 state.specialHoliday = SHAVUOT
             }
-            else if (data.title.contains(PESACH)) {
+            else if (data.name.contains(PESACH)) {
                 state.specialHoliday = PESACH
             }
-            else if (data.title.contains(SUKKOT)) {
+            else if (data.name.contains(SUKKOT)) {
                 state.specialHoliday = SUKKOT
             }
-            else if (data.title.contains(YOM_KIPPUR)) {
+            else if (data.name.contains(YOM_KIPPUR)) {
                 state.specialHoliday = YOM_KIPPUR
             }
-            else if (data.title == SHMINI_ATZERET) {
+            else if (data.name == SHMINI_ATZERET) {
                 state.specialHoliday = null
             }
         }
@@ -327,7 +373,7 @@ def scheduleNextShabbatEvent() {
             
             state.nextEventType = type
             state.nextEventTime = data.when
-            if (data.isTest)
+            if (data["isTest"])
                 state.nextEventTest = true
             
             schedulePendingEvent()
@@ -354,18 +400,14 @@ def schedulePendingEvent() {
         if (!(nextEventTime instanceof Date))
             nextEventTime = toDateTime(nextEventTime.toString())
         
-        if (nextEventTime.getTime() < now()) {
-            if (debugLogging)
-                log.debug "Not scheduling pending event because it is in the past"
-            
-            return
-        }
-        
         if (state.nextEventType == CANDLES) {
             setRegularTime(nextEventTime.getTime())
             if (state.initializing) {
                 state.initializing = false
-                plag()
+                if (preferEarly)
+                    plag()
+                else
+                    regular()
             }
             
             nextEventTime = getActiveTime()
@@ -375,22 +417,32 @@ def schedulePendingEvent() {
             log.debug "schedulePendingEvent, nextEventTime is ${nextEventTime}"
         }
         
+        if (nextEventTime.getTime() < now()) {
+            if (debugLogging)
+                log.debug "Pending event is in the past, executing immediately"
+            
+            if (state.nextEventType == CANDLES) {
+                shabbatStart()
+            }
+            else {
+                shabbatEnd()
+            }
+            
+            return
+        }
+        
         Calendar cal = Calendar.getInstance()
         cal.setTime(nextEventTime)
         
         String scheduleStr = String.format("%d %d %d %d %d ? %d", cal.get(Calendar.SECOND), cal.get(Calendar.MINUTE), cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
-        
-        Map extraData =[:]
-        if (state.nextEventTest)
-            extraData["test"] = true
-        
+                
         if (debugLogging) {
             log.debug "schedule cron string is ${scheduleStr}"
-            log.debug "next event is ${state.nextEventType} at ${nextEventTime}, holiday=${state.specialHoliday} with extraData=${extraData}"
+            log.debug "next event is ${state.nextEventType} at ${nextEventTime}, holiday=${state.specialHoliday}"
         }
         
         if (state.nextEventType == CANDLES) {
-            schedule(scheduleStr, shabbatStart, [data: extraData])
+            schedule(scheduleStr, shabbatStart)
             
             if (!state.nextEventTest) {
                 Calendar speakTime = Calendar.getInstance()
@@ -398,6 +450,7 @@ def schedulePendingEvent() {
                 speakTime.set(Calendar.SECOND, 0)
                 speakTime.set(Calendar.MINUTE, 0)
                 speakTime.set(Calendar.HOUR_OF_DAY, 0)
+                Map extraData =[:]
                 extraData["when"] = nextEventTime
                 if (now() >= speakTime.getTimeInMillis()) {
                     updateSpeakText(extraData)
@@ -409,7 +462,7 @@ def schedulePendingEvent() {
             }
         }
         else
-            schedule(scheduleStr, shabbatEnd, [data: extraData])
+            schedule(scheduleStr, shabbatEnd)
     }
     else if (debugLogging) {
         log.debug "No pending event found"
@@ -432,24 +485,18 @@ def updateSpeakText(data) {
     sendEvent("name": "candleLightingSpeakText", "value": text)
 }
 
-def shabbatStart(data) {
-    Object isTest = data["test"]
-    if (isTest == null)
-        isTest = false
-    else
-        isTest = isTest.toString().toBoolean()
-    
+def shabbatStart() {
     if (notWhen != null && location.getMode() != notWhen) {
         if (location.getMode() != startMode) {
-            log.info "shabbatStart setting mode to ${startMode}, holiday=${state.specialHoliday}, isTest=${isTest}, data=${data}"
-            if (!logOnly && !isTest) {
-                location.setMode(startMode)
-                sendEvent("name": "specialHoliday", value: (state.specialHoliday == null ? "" : state.specialHoliday))
+            havdalahMade()
+            log.info "shabbatStart setting mode to ${startMode}, holiday=${state.specialHoliday}"
+            location.setMode(startMode)
+            if (state.specialHoliday == null || state.specialHoliday.isEmpty()) {
+                device.deleteCurrentState("specialHoliday")
             }
-            else
-                log.info "Log only, not doing anything"
-            
-            state.processedStartEvent = true
+            else {
+                sendEvent("name": "specialHoliday", value: state.specialHoliday)
+            }
         }
     }
     else {
@@ -460,63 +507,49 @@ def shabbatStart(data) {
     shabbatEventTriggered()
 }
 
-def shabbatEnd(data) {
-    Object isTest = data["test"]
-    if (isTest == null)
-        isTest = false
-    else
-        isTest = isTest.toString().toBoolean()
-    
-    log.info "shabbatEnd isTest=${isTest}, data=${data}"
+def shabbatEnd() {
     String nextSpecialHoliday = state.specialHoliday
-    String aish = HAVDALAH_NO_FIRE
-    if (state.processedStartEvent || logOnly || isTest) {
-        state.processedStartEvent = false
+    String aish = HAVDALAH_NO_FIRE    
+    log.info "shabbatEnd setting mode to " + endMode
         
-        log.info "shabbatEnd setting mode to " + endMode
-        
-        if (!logOnly && !isTest) {
-            location.setMode(endMode)
-        
-            restorePreviousType(HOLIDAY, true)
-        
-            if (state.specialHoliday != SUKKOT) {
-                nextSpecialHoliday = null
-            }
-        }
-        else
-            log.info "Log only, not doing anything"
-        
-        Calendar cal = Calendar.getInstance()
-        if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
-            log.info "Need havdalah on fire..."
-            if (logOnly || isTest) {
-                log.info "Log only, not doing anything"
-                aish = HAVDALAH_NONE
-            }
-            else {
-                aish = HAVDALAH_FIRE
-                if (ignoreHavdalahOnFireAfter != null && ignoreHavdalahOnFireAfter > 0)
-                    runIn(ignoreHavdalahOnFireAfter * 60, havdalahMade)
-            }
-        }
+    if (location.getMode() != endMode) {
+        location.setMode(endMode)
     }
-    else if (notWhen != null && location.getMode() == notWhen) {
+        
+    if (state.specialHoliday != SUKKOT) {
         nextSpecialHoliday = null
+    }
+        
+    Calendar cal = Calendar.getInstance()
+    if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
+        log.info "Need havdalah on fire..."
+        aish = HAVDALAH_FIRE
+        if (ignoreHavdalahOnFireAfter != null && ignoreHavdalahOnFireAfter > 0)
+            runIn(ignoreHavdalahOnFireAfter * 60, havdalahMade)
     }
     
     state.specialHoliday = nextSpecialHoliday
-    sendEvent("name": "specialHoliday", "value": (nextSpecialHoliday == null ? "" : nextSpecialHoliday))
+    if (nextSpecialHoliday == null) {
+        device.deleteCurrentState("specialHoliday")
+    }
+    else {
+        sendEvent("name": "specialHoliday", "value": nextSpecialHoliday)
+    }
+    
     sendEvent("name": "havdalah", "value": aish)
-    sendEvent("name": "candleLightingSpeakText", "value": "")
+    device.deleteCurrentState("candleLightingSpeakText")
+    
+    // Schedule the next event before restoring the previous type to avoid rescheduling the same pending event infinitely
+    shabbatEventTriggered()
+    
+    restorePreviousType(HOLIDAY, true)
     if (preferEarly)
         restorePreviousManualType()
-    
-    shabbatEventTriggered()
 }
 
 def havdalahMade() {
-    sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
+    device.deleteCurrentState("havdalah")
+    unschedule(havdalahMade)
 }
 
 def shabbatEventTriggered() {
