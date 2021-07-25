@@ -9,7 +9,7 @@
       "id": "261d3ff7-6cd2-4861-9448-c0f3d05175fe",
       "name": "Shabbat and Holiday Scheduler",
       "namespace": "shabbatmode",
-      "location": "https://raw.githubusercontent.com/dds82/shabbat/main/hubitat-shabbat-scheduler.groovy",
+      "location": "https://raw.githubusercontent.com/dds82/shabbat/main/shabbat-and-holiday-scheduler.groovy",
       "required": true
     }
   ]
