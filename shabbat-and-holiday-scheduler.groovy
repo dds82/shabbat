@@ -458,7 +458,7 @@ def schedulePendingEvent() {
                     updateSpeakText(extraData)
                 }
                 else {
-                    String textUpdateSchedule = String.format("%d %d %d %d %d ? %d", 0, 0, 0, cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
+                    String textUpdateSchedule = String.format("%d %d %d %d %d ? %d", 0, 1, 0, cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
                     schedule(textUpdateSchedule, updateSpeakText, [data: extraData])
                 }
             }
