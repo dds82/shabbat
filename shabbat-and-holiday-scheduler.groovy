@@ -457,8 +457,12 @@ def schedulePendingEvent() {
                 if (now() >= speakTime.getTimeInMillis()) {
                     updateSpeakText(extraData)
                 }
-                else {
+                else {                    
                     String textUpdateSchedule = String.format("%d %d %d %d %d ? %d", 0, 1, 0, cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
+                    if (debugLogging) {
+                        log.debug "scheduling candle lighting text update for ${textUpdateSchedule}"
+                    }
+                    
                     schedule(textUpdateSchedule, updateSpeakText, [data: extraData])
                 }
             }
