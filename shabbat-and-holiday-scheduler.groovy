@@ -455,6 +455,10 @@ def schedulePendingEvent() {
                 Map extraData =[:]
                 extraData["when"] = nextEventTime
                 if (now() >= speakTime.getTimeInMillis()) {
+                    if (debugLogging) {
+                        log.debug "updating candle lighting text..."
+                    }
+                    
                     updateSpeakText(extraData)
                 }
                 else {                    
