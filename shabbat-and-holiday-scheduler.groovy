@@ -22,6 +22,7 @@ import java.text.SimpleDateFormat
 @Field static final String CANDLES = "candles"
 @Field static final String HAVDALAH = "havdalah"
 
+@Field static final String HAVDALAH_NONE = "None"
 @Field static final String HAVDALAH_FIRE = "Fire"
 @Field static final String HAVDALAH_NO_FIRE = "No Fire"
 
@@ -29,7 +30,6 @@ import java.text.SimpleDateFormat
 @Field static final Map<String, List> eventLists = new ConcurrentHashMap<>()
 
 @Field static final Set fetchInProgress = new HashSet<>()
-@Field static final Set needsRefresh = new HashSet<>()
 
 metadata {
  	definition (name: "Shabbat and Holiday Scheduler", namespace: "shabbatmode", author: "Daniel Segall") {
@@ -44,9 +44,8 @@ metadata {
         attribute "activeTime", "number"
         attribute "times", "string"
         attribute "activeType", "enum", ["Regular", "Plag", "Early"]
-        attribute "havdalah", "enum", ["None", "Fire", "No Fire"]
+        attribute "havdalah", "enum", [HAVDALAH_NONE, HAVDALAH_FIRE, HAVDALAH_NO_FIRE]
         attribute "specialHoliday", "enum", ["", PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR]
-        attribute "candleLightingSpeakText", "string"
         command "regular"
         command "plag"
         command "early"
@@ -100,9 +99,6 @@ def createStateMap() {
  def initialize() {
      doUnschedule()
      createStateMap()
-     device.deleteCurrentState("candleLightingSpeakText")
-     
-     schedulePendingEvent()
     fetchSchedule()
  }
 
@@ -132,7 +128,7 @@ def unscheduleAllEvents() {
 def fullReset() {
     log.info "fullReset"
     device.deleteCurrentState("specialHoliday")
-    device.deleteCurrentState("havdalah")
+    sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
     state.initializing = true
     state.specialHoliday = null
     initialize()
@@ -154,7 +150,6 @@ def uninstalled() {
 
 def doUnschedule() {
     unschedule(fetchSchedule)
-    unschedule(updateSpeakText)
     unschedule(shabbatStart)
     unschedule(shabbatEnd)
     unschedule(havdalahMade)
@@ -186,9 +181,8 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
     
     synchronized (fetchInProgress) {
         if (!fetchInProgress.add(device.id)) {
-            needsRefresh.add(device.id)
             if (debugLogging)
-                log.debug "Deferring fetch because fetch already in progress"
+                log.debug "Fetch already in progress, ignoring fetch request"
             
             return
         }
@@ -231,8 +225,12 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
 def scheduleUpdater(response, data) {
     try {
         if (response.getStatus() != 200) {
-            log.error response.getErrorData()
+            log.error "Error fetching schedule data: ${response.getStatus()}: ${response.getErrorData()}"
             state.expectEmptyList = true
+            if (debugLogging)
+                log.debug "Scheduling refetch in 30 minutes"
+            
+            runIn(30 * 60, fetchSchedule)            
             return
         }
     
@@ -286,22 +284,13 @@ def scheduleUpdater(response, data) {
     
         if (debugLogging)
             log.debug "Schedule fetch complete"
-        }
+    }
     finally {
-        boolean rerun = false
         synchronized (fetchInProgress) {
             fetchInProgress.remove(device.id)
-            rerun = needsRefresh.remove(device.id)
         }
         
-        if (rerun) {
-            if (debugLogging)
-                log.debug "Needs to re-execute fetch"
-            
-            runIn(1, fetchSchedule)
-        }
-        else
-            scheduleFetchTask()
+        scheduleFetchTask()
     }
 }
 
@@ -378,6 +367,9 @@ def scheduleNextShabbatEvent() {
             if (data["isTest"])
                 state.nextEventTest = true
             
+            if (eventList.isEmpty())
+                state.expectEmptyList = true
+            
             schedulePendingEvent()
             break
         }
@@ -389,6 +381,7 @@ def scheduleNextShabbatEvent() {
     
     if (eventList == null || eventList.isEmpty()) {
         state.expectEmptyList = true
+        state.initializing = false
     }
 }
 
@@ -405,11 +398,12 @@ def schedulePendingEvent() {
         if (state.nextEventType == CANDLES) {
             setRegularTime(nextEventTime.getTime())
             if (state.initializing) {
-                state.initializing = false
                 if (preferEarly)
                     plag()
                 else
                     regular()
+                
+                state.initializing = false
             }
             
             nextEventTime = getActiveTime()
@@ -445,31 +439,6 @@ def schedulePendingEvent() {
         
         if (state.nextEventType == CANDLES) {
             schedule(scheduleStr, shabbatStart)
-            
-            if (!state.nextEventTest) {
-                Calendar speakTime = Calendar.getInstance()
-                speakTime.setTime(nextEventTime)
-                speakTime.set(Calendar.SECOND, 0)
-                speakTime.set(Calendar.MINUTE, 0)
-                speakTime.set(Calendar.HOUR_OF_DAY, 0)
-                Map extraData =[:]
-                extraData["when"] = nextEventTime
-                if (now() >= speakTime.getTimeInMillis()) {
-                    if (debugLogging) {
-                        log.debug "updating candle lighting text..."
-                    }
-                    
-                    updateSpeakText(extraData)
-                }
-                else {                    
-                    String textUpdateSchedule = String.format("%d %d %d %d %d ? %d", 0, 1, 0, cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
-                    if (debugLogging) {
-                        log.debug "scheduling candle lighting text update for ${textUpdateSchedule}"
-                    }
-                    
-                    schedule(textUpdateSchedule, updateSpeakText, [data: extraData])
-                }
-            }
         }
         else
             schedule(scheduleStr, shabbatEnd)
@@ -487,12 +456,6 @@ def schedulePendingEvent() {
         // Re-fetch
         fetchSchedule()
     }
-}
-
-def updateSpeakText(data) {
-    SimpleDateFormat sdf = new SimpleDateFormat("h:mm a")
-    String text = String.format("Candle lighting today is at %s", sdf.format((Date)data["when"]))
-    sendEvent("name": "candleLightingSpeakText", "value": text)
 }
 
 def shabbatStart() {
@@ -547,7 +510,6 @@ def shabbatEnd() {
     }
     
     sendEvent("name": "havdalah", "value": aish)
-    device.deleteCurrentState("candleLightingSpeakText")
     
     // Schedule the next event before restoring the previous type to avoid rescheduling the same pending event infinitely
     shabbatEventTriggered()
@@ -558,7 +520,11 @@ def shabbatEnd() {
 }
 
 def havdalahMade() {
-    device.deleteCurrentState("havdalah")
+    if (debugLogging) {
+        log.debug "havdalahMade()"
+    }
+    
+    sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
     unschedule(havdalahMade)
 }
 
@@ -632,7 +598,9 @@ def removePreviousType(key) {
 def updateActiveTime(type) {
     Calendar regular = regularTimeOnCalendar()
     updateActiveTime(type, regular, false)
-    schedulePendingEvent()
+    if (!state.initializing) {
+        schedulePendingEvent()
+    }
 }
 
 def updateActiveTime(type, regular, timeChanged = true) {
@@ -741,6 +709,8 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
     
     final String dimBegin = "<i>"
     final String dimEnd = "</i>"
+    
+    final boolean clickable = regularTime > now()
     
     if (earlyOption) {
         String text = clickableBegin("plag")
