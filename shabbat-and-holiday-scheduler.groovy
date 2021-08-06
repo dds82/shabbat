@@ -605,6 +605,8 @@ def updateActiveTime(type) {
 
 def updateActiveTime(type, regular, timeChanged = true) {
     int time = (regular.get(Calendar.HOUR_OF_DAY) * 100) + regular.get(Calendar.MINUTE)
+    
+    // regular
     def regularTime = regular.getTimeInMillis()
     if (debugLogging)
         log.debug "Regular time is " + regular.getTime()
@@ -637,6 +639,11 @@ def updateActiveTime(type, regular, timeChanged = true) {
     int codeDiff = earlyTimeCode - time
     if (debugLogging) {
         log.debug "codeDiff=${codeDiff}"
+    }
+    
+    if (codeDiff > 0) {
+        // Static "early" is later than regular
+        earlyTime = regularTime
     }
     
     boolean earlyOption = codeDiff <= 10
@@ -709,9 +716,7 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
     
     final String dimBegin = "<i>"
     final String dimEnd = "</i>"
-    
-    final boolean clickable = regularTime > now()
-    
+        
     if (earlyOption) {
         String text = clickableBegin("plag")
         if (activeType == "Plag")
