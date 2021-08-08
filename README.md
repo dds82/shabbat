@@ -24,7 +24,7 @@ These are the default values for the configuration options in the device, so if 
 
 So what time is Shabbat, exactly?
 --
-Supports three different Shabbat times:
+You can choose from one of three:
 
 * Plag (configured by a constant offset from the regular time)
 * Early (configured as a constant time; this doesn't change each week)
@@ -52,9 +52,13 @@ Supported holidays:
 * Pesach (will only be set for the first days)
 * Shavuot
 * Sukkot (remains set from the first day through the start of Shmini Atzeret)
+* Rosh Hashana
 * Yom Kippur
+* Shmini Atzeret
 
 *Example use case: on Pesach, your dining room light might need to turn off later than usual at night.
+
+Early Shabbat is not offered as an option for holidays.
 
 Havdalah
 --
@@ -78,9 +82,7 @@ FAQ
 Why is Pesach only set for the first days?
 * Because I wrote this for myself, and for my use cases, there's no need to treat the last days of Pesach any differently then a regular Shabbat.
 
-Why doesn't it set any holiday information for Rosh Hashana/Shmini Atzeret/Simchat Torah?
-* Because I wrote this for myself, and for my use cases, there's no need to treat these days any differently then a regular Shabbat.
-
 Known issues
 --
 * If you were set up for Plag or Early shabbat for one week, and the device already triggered the mode change to Shabbat, and you change your mind, clicking "Refresh" on the device can have unpredictable results.  If you end up in this situation and really need to get your house out of Shabbat mode, the best way to do that is to click "Unschedule all events", then manually take your house out of Shabbat mode, and then choose the correct time you want for that week.
+* Because the device doesn't detect the last days of Pesach, it can potentially offer an early candle lighting time for the 7th day of Pesach if it starts on a Friday night.  I don't feel like fixing this right now.
