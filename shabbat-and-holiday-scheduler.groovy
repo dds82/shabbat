@@ -15,6 +15,7 @@ import java.text.SimpleDateFormat
 @Field static final String PESACH = "Pesach"
 @Field static final String SHAVUOT = "Shavuot"
 @Field static final String SUKKOT = "Sukkot"
+@Field static final String ROSH_HASHANA = "Rosh Hashana"
 @Field static final String YOM_KIPPUR = "Yom Kippur"
 @Field static final String SHMINI_ATZERET = "Shmini Atzeret"
 
@@ -45,7 +46,7 @@ metadata {
         attribute "times", "string"
         attribute "activeType", "enum", ["Regular", "Plag", "Early"]
         attribute "havdalah", "enum", [HAVDALAH_NONE, HAVDALAH_FIRE, HAVDALAH_NO_FIRE]
-        attribute "specialHoliday", "enum", ["", PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR]
+        attribute "specialHoliday", "enum", ["", PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET]
         command "regular"
         command "plag"
         command "early"
@@ -342,11 +343,14 @@ def scheduleNextShabbatEvent() {
             else if (data.name.contains(SUKKOT)) {
                 state.specialHoliday = SUKKOT
             }
+            else if (data.name.contains(ROSH_HASHANA)) {
+                state.specialHoliday = ROSH_HASHANA
+            }
             else if (data.name.contains(YOM_KIPPUR)) {
                 state.specialHoliday = YOM_KIPPUR
             }
             else if (data.name == SHMINI_ATZERET) {
-                state.specialHoliday = null
+                state.specialHoliday = SHMINI_ATZERET
             }
         }
         else {
@@ -647,7 +651,7 @@ def updateActiveTime(type, regular, timeChanged = true) {
     }
     
     def eventDay = regular.get(Calendar.DAY_OF_WEEK)
-    boolean earlyOption = codeDiff <= 10 && eventDay == 6
+    boolean earlyOption = codeDiff <= 10 && eventDay == 6 && state.specialHoliday == null
     if (earlyOption) {
         if (timeChanged && prevEarlyOption != null && prevEarlyOption.booleanValue() != earlyOption) {
             type = getPreviousType(SEASONAL)
