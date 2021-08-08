@@ -58,14 +58,14 @@ Supported holidays:
 * Yom Kippur
 * Shmini Atzeret
 
-*Example use case: on Pesach, your dining room light might need to turn off later than usual at night.
+Example use case: on Pesach, your dining room light might need to turn off later than usual at night.
 
 Early Shabbat is not offered as an option for holidays.
 
 Havdalah
 --
 When Shabbat or Yom Tov ends, the device will set the "havdalah" attribute as appropriate.  See "Exposed states" for more information.
-*Example use case: you might want to dim the lights in a certain room if you will be using a candle for Havdalah.
+Example use case: you might want to dim the lights in a certain room if you will be using a candle for Havdalah.
 
 Exposed states
 --
