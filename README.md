@@ -76,7 +76,7 @@ Exposed states
 * activeTime - which of the previous three times will trigger the change to Shabbat mode
 * activeType - which type of Shabbat is currently active. Values: Plag, Early, Regular
 * havdalah - what type of Havdalah is currently required. Values: None, Fire, No Fire.  This state is updated when Shabbat/Yom Tov ends and is set to "None" after a configured time (default 60 minutes).  You may also set it to "None" manually by using the havdalahMade() command.
-* specialHoliday - which holiday it currently is that may require special treatment (if any). Values (if set): Pesach, Shavuot, Sukkot, Yom Kippur
+* specialHoliday - which holiday it currently is that may require special treatment (if any). Values (if set): Pesach, Shavuot, Sukkot, Rosh Hashana, Yom Kippur, Shmini Atzeret
 
 All times are in milliseconds since the epoch. Times do not update for the following week until Shabbat ends.
 
@@ -84,6 +84,9 @@ FAQ
 --
 Why is Pesach only set for the first days?
 * Because I wrote this for myself, and for my use cases, there's no need to treat the last days of Pesach any differently then a regular Shabbat.
+
+Why is there no Simchat Torah?
+* Because it's continuous with and no different than Shmini Atzeret.
 
 Known issues
 --
