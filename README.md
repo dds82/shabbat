@@ -3,7 +3,7 @@ Hubitat virtual device driver to schedule shabbat/yom tov start and end events a
 
 Why a device instead of an app?
 --
-So it can expose extended state information to other apps that want to use it.  Read on for more information on what's exposed.
+So it can expose extended state information to other apps that want to use it.  Read on for more information about what's exposed.
 
 How it works
 --
