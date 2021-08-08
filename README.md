@@ -9,6 +9,8 @@ How it works
 --
 On the first day of every month, at a random time between midnight and 6am, uses the HebCal API to get the candle lighting and havdalah times for that entire month.  If this fails, it  retries every 30 minutes until it's successful.
 
+The schedule data is not saved to the database, so it also queries HebCal after every Hub reboot.
+
 Required setup
 --
 * Two location modes configured, one for normal operation and one Shabbat mode.
