@@ -1,7 +1,32 @@
 # Shabbat and Holiday Scheduler
-Hubitat virtual device driver to schedule shabbat/yom tov start and end events and change location mode automatically.  Provides options for Plag, constant time early shabbat (with configurable time), and Zman.  Also detects certain holidays which may need special treatment (e.g. lights staying on longer).  Minimum required platform version 2.2.8.141.
+Hubitat virtual device driver to schedule shabbat/yom tov start and end events and change location mode automatically based on the Hub's configured location data.  Minimum required platform version is 2.2.8.141.
 
-Required setup: 2 location modes configured, one for normal operation and one Shabbat mode.  By default, the device uses "Home" as the normal mode and "Shabbat" as the Shabbat mode.
+Why a device instead of an app?
+--
+So it can expose extended state information to other apps that want to use it.  Read on for more information on what's exposed.
+
+How it works
+--
+On the first day of every month, at a random time between midnight and 6am, uses the HebCal API to get the candle lighting and havdalah times for that entire month.  If this fails, it  retries every 30 minutes until it's successful.
+
+Required setup
+--
+* Two location modes configured, one for normal operation and one Shabbat mode.
+* Zip code, or all of Latitude, Longitude, and Time Zone, configured correctly in the hub's "Location and Modes" settings page
+
+Recommended setup
+--
+In addition to the required setup:
+* A mode named "Shabbat".
+* A mode named "Home" (this will be used as the non-Shabbat mode).
+
+So what time is Shabbat, exactly?
+--
+Supports three different Shabbat times:
+
+* Plag (configured by a constant offset from the regular time)
+* Early (configured as a constant time; this doesn't change each week)
+* Zman (regular time; pulled from HebCal)
 
 You can display the "times" attribute on a dashboard. If you configure the Maker API to have access to this device and fill in the two configuration options for it, you can click on any displayed time to use it for the upcoming week. Otherwise, the device supports 3 virtual buttons which can be "push"ed:
 
@@ -9,16 +34,51 @@ You can display the "times" attribute on a dashboard. If you configure the Maker
 * 1 = Early
 * 2 = Zman
 
-Configuration options should be self-explanatory.
+The "Plag" and "Early" times are only offered as options if the Zman time is no more than 10 minutes before the Early time.  Otherwise, it's the wrong time of year for early shabbat, and only the Zman time will be displayed and used.
 
-The device will automatically change the location mode to the Shabbat mode and back to the normal mode at the appropriate times. The reason this is a device instead of an app is so that any app can subscribe to its events or read its exposed states.  The device exposes the following states:
+When installed, the selection defaults to "Plag".  If you change the selected time, the device may revert it back to your previous selection after the following Shabbat ends, based on the following rules:
 
+* If you switch from one early time to another (e.g. Plag to Early), or from Zman to an early time, the new selection will remain.
+* If you switch from an early time to Zman, it depends on whether or not the "Prefer Early Shabbat" option is set.  If it is, the selection will revert back to the previously selected early time; if it isn't, it will remain on Zman.
+* If an early time was selected and the time of year no longer allows for early Shabbat, it will begin using the Zman time automatically.  When early Shabbat begins again the next year, it will go back to that early time.
+
+Holidays
+--
+In addition to automatically scheduling candle lighting and Havdalah events, the device will detect some holidays and set the "specialHoliday" attribute when the holiday begins.  See "Exposed states" for more information.
+
+Supported holidays:
+* Pesach (will only be set for the first days)
+* Shavuot
+* Sukkot (remains set from the first day through the start of Shmini Atzeret)
+* Yom Kippur
+
+*Example use case: on Pesach, your dining room light might need to turn off later than usual at night.
+
+Havdalah
+--
+When Shabbat or Yom Tov ends, the device will set the "havdalah" attribute as appropriate.  See "Exposed states" for more information.
+*Example use case: you might want to dim the lights in a certain room if you will be using a candle for Havdalah.
+
+Exposed states
+--
 * plagTime - the time for the current Plag shabbat
 * earlyTime - the time for the current Early shabbat
 * regularTime - the time for the current Zman shabbat
 * activeTime - which of the previous three times will trigger the change to Shabbat mode
 * activeType - which type of Shabbat is currently active. Values: Plag, Early, Regular
-* havdalah - what type of Havdalah is currently required. Values (if set): Fire, No Fire.  This state is updated when Shabbat/Yom Tov ends and is set to "None" after a configured time (default 60 minutes).  You may also set it to "None" manually by using the havdalahMade() command.
+* havdalah - what type of Havdalah is currently required. Values: None, Fire, No Fire.  This state is updated when Shabbat/Yom Tov ends and is set to "None" after a configured time (default 60 minutes).  You may also set it to "None" manually by using the havdalahMade() command.
 * specialHoliday - which holiday it currently is that may require special treatment (if any). Values (if set): Pesach, Shavuot, Sukkot, Yom Kippur
 
 All times are in milliseconds since the epoch. Times do not update for the following week until Shabbat ends.
+
+FAQ
+--
+Why is Pesach only set for the first days?
+* Because I wrote this for myself, and for my use cases, there's no need to treat the last days of Pesach any differently then a regular Shabbat.
+
+Why doesn't it set any holiday information for Rosh Hashana/Shmini Atzeret/Simchat Torah?
+* Because I wrote this for myself, and for my use cases, there's no need to treat these days any differently then a regular Shabbat.
+
+Known issues
+--
+* If you were set up for Plag or Early shabbat for one week, and the device already triggered the mode change to Shabbat, and you change your mind, clicking "Refresh" on the device can have unpredictable results.  If you end up in this situation and really need to get your house out of Shabbat mode, the best way to do that is to click "Unschedule all events", then manually take your house out of Shabbat mode, and then choose the correct time you want for that week.
