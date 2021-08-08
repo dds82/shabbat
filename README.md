@@ -14,7 +14,7 @@ The schedule data is not saved to the database, so it also queries HebCal after 
 Required setup
 --
 * Two location modes configured, one for normal operation and one Shabbat mode.
-* Zip code, or all of Latitude, Longitude, and Time Zone, configured correctly in the hub's "Location and Modes" settings page
+* Zip code, or all of Latitude, Longitude, and Time Zone, configured correctly in the hub's "Location and Modes" settings page.
 
 Recommended setup
 --
