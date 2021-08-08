@@ -16,9 +16,11 @@ Required setup
 
 Recommended setup
 --
-In addition to the required setup:
-* A mode named "Shabbat".
-* A mode named "Home" (this will be used as the non-Shabbat mode).
+Configure the two modes as follows:
+* Name one "Shabbat".
+* Name one "Home".
+
+These are the default values for the configuration options in the device, so if you use these names, you will have less to configure.
 
 So what time is Shabbat, exactly?
 --
