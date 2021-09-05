@@ -332,7 +332,7 @@ def scheduleNextShabbatEvent() {
         
         if (currentEventType == "holiday") {
             saveCurrentType(HOLIDAY, true)
-            regular()
+            regular(false)
             
             if (data.name.contains(SHAVUOT)) {
                 state.specialHoliday = SHAVUOT
@@ -554,16 +554,16 @@ def getActiveType() {
     return activeType
 }
 
-def plag() {
-    updateActiveTime("Plag")
+def plag(forceReschedule = true) {
+    updateActiveTime("Plag", forceReschedule)
 }
 
-def regular() {
-    updateActiveTime("Regular")
+def regular(forceReschedule = true) {
+    updateActiveTime("Regular", forceReschedule)
 }
 
-def early() {
-    updateActiveTime("Early")
+def early(forceReschedule = true) {
+    updateActiveTime("Early", forceReschedule)
 }
 
 def saveCurrentType(key, onlyIfNotSet=false) {
@@ -599,15 +599,20 @@ def removePreviousType(key) {
     state.savedTypes[key] = null
 }
 
-def updateActiveTime(type) {
+def updateActiveTime(type, boolean forceReschedule = true) {
+    if (debugLogging) log.debug "updateActiveTime, forceReschedule=${forceReschedule}"
     Calendar regular = regularTimeOnCalendar()
     updateActiveTime(type, regular, false)
-    if (!state.initializing) {
+    if (!state.initializing && forceReschedule) {
+        if (debugLogging) log.debug "updateActiveTime scheduling pending event"
         schedulePendingEvent()
+    }
+    else {
+        if (debugLogging) log.debug "updateActiveTime not scheduling pending event"
     }
 }
 
-def updateActiveTime(type, regular, timeChanged = true) {
+def updateActiveTime(type, regular, boolean timeChanged = true) {
     int time = (regular.get(Calendar.HOUR_OF_DAY) * 100) + regular.get(Calendar.MINUTE)
     
     // regular
