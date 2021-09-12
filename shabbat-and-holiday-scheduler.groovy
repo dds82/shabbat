@@ -537,6 +537,7 @@ def shabbatEventTriggered() {
 }
 
 def setRegularTime(long date) {
+    state.regularTime = date
     sendEvent("name":"regularTime", "value":date)
     def activeType = getActiveType()
 
@@ -544,12 +545,10 @@ def setRegularTime(long date) {
 }
 
 def getActiveType() {
-    def activeType = device.getDataValue("activeType")
-    if (activeType == null)
-        activeType = device.currentValue("activeType")
+    def activeType = state.activeType
     
     if (activeType == null)
-        activeType = "Plag"
+        activeType = preferEarly ? "Plag" : "Regular"
     
     return activeType
 }
@@ -567,7 +566,7 @@ def early(forceReschedule = true) {
 }
 
 def saveCurrentType(key, onlyIfNotSet=false) {
-    saveType(key, device.currentValue("activeType"), onlyIfNotSet)
+    saveType(key, state.activeType, onlyIfNotSet)
 }
 
 def saveType(key, type, onlyIfNotSet=false) {
@@ -602,14 +601,17 @@ def removePreviousType(key) {
 def updateActiveTime(type, boolean forceReschedule = true) {
     if (debugLogging) log.debug "updateActiveTime, forceReschedule=${forceReschedule}"
     Calendar regular = regularTimeOnCalendar()
-    updateActiveTime(type, regular, false)
-    if (!state.initializing && forceReschedule) {
-        if (debugLogging) log.debug "updateActiveTime scheduling pending event"
-        schedulePendingEvent()
+    if (regular != null) {
+        updateActiveTime(type, regular, false)
+        if (!state.initializing && forceReschedule) {
+            if (debugLogging) log.debug "updateActiveTime scheduling pending event"
+            schedulePendingEvent()
+        }
+        else {
+            if (debugLogging) log.debug "updateActiveTime not scheduling pending event"
+        }
     }
-    else {
-        if (debugLogging) log.debug "updateActiveTime not scheduling pending event"
-    }
+    else if (debugLogging) log.debug "updateActiveTime no regular time available yet, not scheduling event"
 }
 
 def updateActiveTime(type, regular, boolean timeChanged = true) {
@@ -689,10 +691,9 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     if (timeChanged)
         state.hasEarlyOption = earlyOption
     
-    device.updateDataValue("activeType", type)
-    device.updateDataValue("activeTime", activeTime.toString())
-    device.updateDataValue("earlyTime", earlyTime.toString())
-    device.updateDataValue("plagTime", plagTime.toString())
+    state.activeType = type
+    state.earlyTime = earlyTime
+    state.plagTime = plagTime
     sendEvent("name":"activeType", "value":type)
     sendEvent("name":"activeTime", "value":activeTime)
     sendEvent("name":"earlyTime", "value":earlyTime)
@@ -777,14 +778,15 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
 }
 
 Calendar regularTimeOnCalendar() {
-    regTime = device.currentValue("regularTime")
+    regTime = state.regularTime
     if (regTime == null)
-        log.error "Regular time is null"
+        log.info "Regular time is null, possibly the first event encountered is a Holiday"
     
     return regularTimeOnCalendar(regTime)
 }
 
 Calendar regularTimeOnCalendar(currTime) {
+    if (currTime == null) return null
     Calendar cal = Calendar.getInstance()
     cal.setTimeInMillis(currTime.longValue())
     return cal
@@ -815,24 +817,15 @@ Date getActiveTime() {
     activeType = getActiveType()
     switch (activeType) {
         case "Regular":
-            time = device.getDataValue("regularTime")
-            if (time == null)
-                time = device.currentValue("regularTime")
-        
+            time = state.regularTime        
             break
         
         case "Plag":
-            time = device.getDataValue("plagTime")
-            if (time == null)
-                time = device.currentValue("plagTime")
-        
+            time = state.plagTime
             break
         
         case "Early":
-            time = device.getDataValue("earlyTime")
-            if (time == null)
-                time = device.currentValue("earlyTime")
-        
+            time = state.earlyTime
             break
     }
     
