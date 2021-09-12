@@ -771,7 +771,13 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
         times = text
     }
     else {
-        times = sdf.format(new Date(regularTime))
+        String text = state.specialHoliday
+        if (text != null) {
+            text += "<br /><br />"
+        }
+        
+        text += sdf.format(new Date(regularTime))
+        times = text
     }
     
     sendEvent("name":"times", "value": times)
