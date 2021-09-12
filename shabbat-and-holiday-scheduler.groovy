@@ -23,6 +23,10 @@ import java.text.SimpleDateFormat
 @Field static final String CANDLES = "candles"
 @Field static final String HAVDALAH = "havdalah"
 
+@Field static final String REGULAR = "Regular"
+@Field static final String EARLY = "Early"
+@Field static final String PLAG = "Plag"
+
 @Field static final String HAVDALAH_NONE = "None"
 @Field static final String HAVDALAH_FIRE = "Fire"
 @Field static final String HAVDALAH_NO_FIRE = "No Fire"
@@ -44,7 +48,7 @@ metadata {
         attribute "plagTime","number"
         attribute "activeTime", "number"
         attribute "times", "string"
-        attribute "activeType", "enum", ["Regular", "Plag", "Early"]
+        attribute "activeType", "enum", [REGULAR, PLAG, EARLY]
         attribute "havdalah", "enum", [HAVDALAH_NONE, HAVDALAH_FIRE, HAVDALAH_NO_FIRE]
         attribute "specialHoliday", "enum", ["", PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET]
         command "regular"
@@ -67,7 +71,7 @@ preferences
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
         input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: "Away"
         input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this much time", required: false, defaultValue: 60, description: "Enter minutes, or 0 to disable this feature"
-        input name: "preferEarly", type: "bool", title: "Prefer Early Shabbat", description: "If turned on and the time is switched to Zman, it will automatically revert to the previously selected early type after the next Shabbat ends", defaultValue: true
+        input name: "preferredTime", type: "enum", title: "Preferred Shabbat Time", options: [PLAG, EARLY, REGULAR], description: "Preferred time to make Shabbat", defaultValue: PLAG
         input name: "makerUrl", type: "string", title: "Maker API base URL", required: false, description: "The base URL for the maker API, up to and including 'devices/'"
         input name: "accessToken", type: "string", title: "Maker API access token", required: false, description: "Access token for the maker API"
         input name: "debugLogging", type: "bool", title: "Debug Logging", defaultValue: true
@@ -402,10 +406,20 @@ def schedulePendingEvent() {
         if (state.nextEventType == CANDLES) {
             setRegularTime(nextEventTime.getTime())
             if (state.initializing) {
-                if (preferEarly)
-                    plag()
-                else
-                    regular()
+                switch (preferredTime) {
+                    case PLAG:
+                        plag()
+                        break
+                    
+                    case EARLY:
+                        early()
+                        break
+                    
+                    case REGULAR:
+                    default:
+                        regular()
+                        break
+                }
                 
                 state.initializing = false
             }
@@ -519,7 +533,7 @@ def shabbatEnd() {
     shabbatEventTriggered()
     
     restorePreviousType(HOLIDAY, true)
-    if (preferEarly)
+    if (preferredTime != REGULAR)
         restorePreviousManualType()
 }
 
@@ -548,7 +562,7 @@ def getActiveType() {
     def activeType = state.activeType
     
     if (activeType == null)
-        activeType = preferEarly ? "Plag" : "Regular"
+        activeType = preferredTime
     
     return activeType
 }
