@@ -299,6 +299,16 @@ def scheduleUpdater(response, data) {
     }
 }
 
+boolean areOnSameDay(long time1, long time2) {
+    Calendar cal = Calendar.getInstance()
+    cal.setTimeInMillis(time1)
+    
+    Calendar cal2 = Calendar.getInstance()
+    cal2.setTimeInMillis(time2)
+    
+    return (cal.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)) && (cal.get(Calendar.MONTH) == cal2.get(Calendar.MONTH)) && (cal.get(Calendar.DAY_OF_MONTH) == cal2.get(Calendar.DAY_OF_MONTH))
+}
+
 def scheduleNextShabbatEvent() {
     state.nextEventTest=false
     long currentTime = now()
@@ -318,23 +328,24 @@ def scheduleNextShabbatEvent() {
         return
     }
     
+    boolean hadOldEvents = false
+    boolean mostRecentHolidayDetectedToday = false
     while (!eventList.isEmpty()) {
         Map data = eventList.remove(0)
         if (debugLogging)
             log.debug "Current event data is " + data
         
-        if (data.when.getTime() < currentTime && !data["isTest"]) {
-            if (debugLogging)
-                log.debug "Skipping current event data because it is in the past"
-            
-            continue
-        }
-        
         String currentEventType = data.type
         if (debugLogging)
             log.debug "Current event type is " + currentEventType
         
-        if (currentEventType == "holiday") {
+        boolean old = false
+        if (data.when.getTime() < currentTime && !data["isTest"]) {            
+            old = true
+            hadOldEvents = true
+        }
+        
+        if (currentEventType == HOLIDAY) {
             saveCurrentType(HOLIDAY, true)
             regular(false)
             
@@ -356,9 +367,24 @@ def scheduleNextShabbatEvent() {
             else if (data.name == SHMINI_ATZERET) {
                 state.specialHoliday = SHMINI_ATZERET
             }
+            
+            mostRecentHolidayDetectedToday = areOnSameDay(data.when.getTime(), currentTime)
         }
         else {
             String type = data.type
+            
+            if (old) {
+                if (debugLogging)
+                    log.debug "Skipping current event data because it is in the past"
+                
+                if (type == HAVDALAH) {
+                    if (debugLogging) log.debug "calling specialHolidayEnd(false) ${state.specialHoliday}"
+                    specialHolidayEnd(false)
+                }
+                
+                continue
+            }
+            
             // This code was for an old HebCal bug where they didn't report Havdalah events on Chanuka.  That seems to be resolved
             /*Calendar cal = Calendar.getInstance()
             cal.setTime(data.when)
@@ -369,6 +395,9 @@ def scheduleNextShabbatEvent() {
             if (detectChanuka && cal.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY && type == CANDLES) {
                 type = HAVDALAH
             }*/
+            
+            if (hadOldEvents && !mostRecentHolidayDetectedToday)
+                fireSpecialHolidayEvent(state.specialHoliday)
             
             state.nextEventType = type
             state.nextEventTime = data.when
@@ -482,12 +511,7 @@ def shabbatStart() {
             havdalahMade()
             log.info "shabbatStart setting mode to ${startMode}, holiday=${state.specialHoliday}"
             location.setMode(startMode)
-            if (state.specialHoliday == null || state.specialHoliday.isEmpty()) {
-                device.deleteCurrentState("specialHoliday")
-            }
-            else {
-                sendEvent("name": "specialHoliday", value: state.specialHoliday)
-            }
+            specialHolidayStart()
         }
     }
     else {
@@ -498,33 +522,26 @@ def shabbatStart() {
     shabbatEventTriggered()
 }
 
+void specialHolidayStart() {
+    fireSpecialHolidayEvent(state.specialHoliday)
+}
+
 def shabbatEnd() {
-    String nextSpecialHoliday = state.specialHoliday
     String aish = HAVDALAH_NO_FIRE    
     log.info "shabbatEnd setting mode to " + endMode
         
     if (location.getMode() != endMode) {
         location.setMode(endMode)
     }
-        
-    if (state.specialHoliday != SUKKOT) {
-        nextSpecialHoliday = null
-    }
-        
+    
+    specialHolidayEnd()
+    
     Calendar cal = Calendar.getInstance()
     if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
         log.info "Need havdalah on fire..."
         aish = HAVDALAH_FIRE
         if (ignoreHavdalahOnFireAfter != null && ignoreHavdalahOnFireAfter > 0)
             runIn(ignoreHavdalahOnFireAfter * 60, havdalahMade)
-    }
-    
-    state.specialHoliday = nextSpecialHoliday
-    if (nextSpecialHoliday == null) {
-        device.deleteCurrentState("specialHoliday")
-    }
-    else {
-        sendEvent("name": "specialHoliday", "value": nextSpecialHoliday)
     }
     
     sendEvent("name": "havdalah", "value": aish)
@@ -535,6 +552,27 @@ def shabbatEnd() {
     restorePreviousType(HOLIDAY, true)
     if (preferredTime != REGULAR)
         restorePreviousManualType()
+}
+
+void specialHolidayEnd(boolean fireEvent = true) {
+    String nextSpecialHoliday = state.specialHoliday
+    if (state.specialHoliday != SUKKOT) {
+        nextSpecialHoliday = null
+    }
+    
+    state.specialHoliday = nextSpecialHoliday
+    if (fireEvent)
+        fireSpecialHolidayEvent(nextSpecialHoliday)
+}
+
+void fireSpecialHolidayEvent(String nextSpecialHoliday) {
+    if (debugLogging) log.debug "fireSpecialHolidayEvent ${nextSpecialHoliday}"
+    if (nextSpecialHoliday == null || nextSpecialHoliday.isEmpty()) {
+        device.deleteCurrentState("specialHoliday")
+    }
+    else {
+        sendEvent("name": "specialHoliday", "value": nextSpecialHoliday)
+    }
 }
 
 def havdalahMade() {
