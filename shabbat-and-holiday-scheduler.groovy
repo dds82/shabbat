@@ -71,7 +71,7 @@ preferences
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
         input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: "Away"
         input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this much time", required: false, defaultValue: 60, description: "Enter minutes, or 0 to disable this feature"
-        input name: "preferredTime", type: "enum", title: "Preferred Shabbat Time", options: [PLAG, EARLY, REGULAR], description: "Preferred time to make Shabbat", defaultValue: PLAG
+        input name: "preferredTime", type: "enum", title: "Preferred Shabbat Time", options: [PLAG, EARLY, REGULAR], description: "Preferred time to make Shabbat", defaultValue: REGULAR
         input name: "makerUrl", type: "string", title: "Maker API base URL", required: false, description: "The base URL for the maker API, up to and including 'devices/'"
         input name: "accessToken", type: "string", title: "Maker API access token", required: false, description: "Access token for the maker API"
         input name: "debugLogging", type: "bool", title: "Debug Logging", defaultValue: true
