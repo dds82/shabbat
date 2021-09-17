@@ -827,6 +827,7 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
         if (text != null) {
             text += "<br /><br />"
         }
+        else text = ""
         
         text += sdf.format(new Date(regularTime))
         times = text
