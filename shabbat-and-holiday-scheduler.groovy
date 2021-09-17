@@ -534,8 +534,6 @@ def shabbatEnd() {
         location.setMode(endMode)
     }
     
-    specialHolidayEnd()
-    
     Calendar cal = Calendar.getInstance()
     if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
         log.info "Need havdalah on fire..."
@@ -545,6 +543,8 @@ def shabbatEnd() {
     }
     
     sendEvent("name": "havdalah", "value": aish)
+    
+    specialHolidayEnd()
     
     // Schedule the next event before restoring the previous type to avoid rescheduling the same pending event infinitely
     shabbatEventTriggered()
