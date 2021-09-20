@@ -12,6 +12,7 @@ import java.text.SimpleDateFormat
 @Field static final String SEASONAL = "__seasonal__"
 @Field static final String MANUAL_EARLY = "__manual_early__"
 
+@Field static final String NONE = "None"
 @Field static final String PESACH = "Pesach"
 @Field static final String SHAVUOT = "Shavuot"
 @Field static final String SUKKOT = "Sukkot"
@@ -50,13 +51,14 @@ metadata {
         attribute "times", "string"
         attribute "activeType", "enum", [REGULAR, PLAG, EARLY]
         attribute "havdalah", "enum", [HAVDALAH_NONE, HAVDALAH_FIRE, HAVDALAH_NO_FIRE]
-        attribute "specialHoliday", "enum", ["", PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET]
+        attribute "specialHoliday", "enum", [NONE, PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET]
         command "regular"
         command "plag"
         command "early"
         command "havdalahMade"
         command "unscheduleAllEvents"
         command "testEvent", [[name:"Type*", type:"ENUM", constraints: [CANDLES,HAVDALAH,HOLIDAY]], [name:"Delay*", type:"NUMBER", description:"How long from, in seconds, from when the testEvent button is pushed to schedule this event"], [name:"Holiday", type:"ENUM", constraints:[PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]]]
+        command "forceHoliday", [[name:"Holiday", type:"ENUM", constraints:[NONE, PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]]]
      }
  }
 
@@ -132,7 +134,7 @@ def unscheduleAllEvents() {
 
 def fullReset() {
     log.info "fullReset"
-    device.deleteCurrentState("specialHoliday")
+    sendEvent("name": "specialHoliday", "value": NONE)
     sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
     state.initializing = true
     state.specialHoliday = null
@@ -158,6 +160,10 @@ def doUnschedule() {
     unschedule(shabbatStart)
     unschedule(shabbatEnd)
     unschedule(havdalahMade)
+}
+
+def forceHoliday(String holiday) {
+    sendEvent("name": "specialHoliday", "value": holiday)    
 }
 
 def testEvent(String eventType, BigDecimal delay, String holiday) {
@@ -299,14 +305,20 @@ def scheduleUpdater(response, data) {
     }
 }
 
-boolean areOnSameDay(long time1, long time2) {
+int dayCompare(long time1, long time2) {
     Calendar cal = Calendar.getInstance()
     cal.setTimeInMillis(time1)
     
     Calendar cal2 = Calendar.getInstance()
     cal2.setTimeInMillis(time2)
     
-    return (cal.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)) && (cal.get(Calendar.MONTH) == cal2.get(Calendar.MONTH)) && (cal.get(Calendar.DAY_OF_MONTH) == cal2.get(Calendar.DAY_OF_MONTH))
+    int yearComp = (cal.get(Calendar.YEAR) - cal2.get(Calendar.YEAR)) * 10000
+    int monthComp = (cal.get(Calendar.MONTH) - cal2.get(Calendar.MONTH)) * 100
+    int dayComp = (cal.get(Calendar.DAY_OF_MONTH) - cal2.get(Calendar.DAY_OF_MONTH))
+    
+    int result =  yearComp + monthComp + dayComp
+    if (debugLogging) log.debug "cal=${cal.getTime()}, cal2=${cal2.getTime()}, result=${result}"
+    return result
 }
 
 def scheduleNextShabbatEvent() {
@@ -329,7 +341,7 @@ def scheduleNextShabbatEvent() {
     }
     
     boolean hadOldEvents = false
-    boolean mostRecentHolidayDetectedToday = false
+    int mostRecentHolidayComp = 1
     while (!eventList.isEmpty()) {
         Map data = eventList.remove(0)
         if (debugLogging)
@@ -343,6 +355,7 @@ def scheduleNextShabbatEvent() {
         if (data.when.getTime() < currentTime && !data["isTest"]) {            
             old = true
             hadOldEvents = true
+            if (debugLogging) log.debug "Old event found at ${data.when}, current time is ${currentTime}"
         }
         
         if (currentEventType == HOLIDAY) {
@@ -368,7 +381,7 @@ def scheduleNextShabbatEvent() {
                 state.specialHoliday = SHMINI_ATZERET
             }
             
-            mostRecentHolidayDetectedToday = areOnSameDay(data.when.getTime(), currentTime)
+            mostRecentHolidayComp = dayCompare(data.when.getTime(), currentTime)
         }
         else {
             String type = data.type
@@ -381,8 +394,8 @@ def scheduleNextShabbatEvent() {
                     if (debugLogging) log.debug "calling specialHolidayEnd(false) ${state.specialHoliday}"
                     specialHolidayEnd(false)
                 }
-                
-                continue
+                else if (type == CANDLES || mostRecentHolidayComp >= 0)
+                    continue
             }
             
             // This code was for an old HebCal bug where they didn't report Havdalah events on Chanuka.  That seems to be resolved
@@ -396,7 +409,7 @@ def scheduleNextShabbatEvent() {
                 type = HAVDALAH
             }*/
             
-            if (hadOldEvents && !mostRecentHolidayDetectedToday)
+            if (hadOldEvents && mostRecentHolidayComp < 0)
                 fireSpecialHolidayEvent(state.specialHoliday)
             
             state.nextEventType = type
@@ -529,20 +542,23 @@ void specialHolidayStart() {
 def shabbatEnd() {
     String aish = HAVDALAH_NO_FIRE    
     log.info "shabbatEnd setting mode to " + endMode
-        
-    if (location.getMode() != endMode) {
+     
+    boolean unset = location.getMode() != endMode
+    if (unset) {
         location.setMode(endMode)
-    }
     
-    Calendar cal = Calendar.getInstance()
-    if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
-        log.info "Need havdalah on fire..."
-        aish = HAVDALAH_FIRE
-        if (ignoreHavdalahOnFireAfter != null && ignoreHavdalahOnFireAfter > 0)
-            runIn(ignoreHavdalahOnFireAfter * 60, havdalahMade)
-    }
+        Calendar cal = Calendar.getInstance()
+        if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
+            log.info "Need havdalah on fire..."
+            aish = HAVDALAH_FIRE
+            if (ignoreHavdalahOnFireAfter != null && ignoreHavdalahOnFireAfter > 0)
+                runIn(ignoreHavdalahOnFireAfter * 60, havdalahMade)
+        }
+
     
-    sendEvent("name": "havdalah", "value": aish)
+        sendEvent("name": "havdalah", "value": aish)
+    }
+    else sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
     
     specialHolidayEnd()
     
@@ -568,7 +584,7 @@ void specialHolidayEnd(boolean fireEvent = true) {
 void fireSpecialHolidayEvent(String nextSpecialHoliday) {
     if (debugLogging) log.debug "fireSpecialHolidayEvent ${nextSpecialHoliday}"
     if (nextSpecialHoliday == null || nextSpecialHoliday.isEmpty()) {
-        device.deleteCurrentState("specialHoliday")
+        sendEvent("name": "specialHoliday", "value": NONE)
     }
     else {
         sendEvent("name": "specialHoliday", "value": nextSpecialHoliday)
