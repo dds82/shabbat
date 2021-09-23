@@ -52,6 +52,7 @@ metadata {
         attribute "activeType", "enum", [REGULAR, PLAG, EARLY]
         attribute "havdalah", "enum", [HAVDALAH_NONE, HAVDALAH_FIRE, HAVDALAH_NO_FIRE]
         attribute "specialHoliday", "enum", [NONE, PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET]
+        attribute "holidayDay", "number" // Usually 1 or 2; may be 3 for Thur-Fri-Sat holidays. Or -1 if there is no holiday
         command "regular"
         command "plag"
         command "early"
@@ -135,6 +136,7 @@ def unscheduleAllEvents() {
 def fullReset() {
     log.info "fullReset"
     sendEvent("name": "specialHoliday", "value": NONE)
+    sendEvent("name": "holidayDay", "value": -1)
     sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
     state.initializing = true
     state.specialHoliday = null
@@ -163,7 +165,9 @@ def doUnschedule() {
 }
 
 def forceHoliday(String holiday) {
-    sendEvent("name": "specialHoliday", "value": holiday)    
+    state.holidayDay = 1
+    sendEvent("name": "specialHoliday", "value": holiday)
+    sendEvent("name": "holidayDay", "value": 1)
 }
 
 def testEvent(String eventType, BigDecimal delay, String holiday) {
@@ -267,8 +271,19 @@ def scheduleUpdater(response, data) {
         for (item in result.items) {
             if (item.category == CANDLES || item.category == HAVDALAH)
                 eventList.add([type: item.category, when: toDateTime(item.date)])
-            else if (item.category == HOLIDAY && (item.title.contains("Erev") || item.title == SHMINI_ATZERET))
-                eventList.add([type: item.category, name: item.title, when: toDateTime(item.date)])
+            else if (item.category == HOLIDAY) {
+                if (item.title.contains("Erev")) {
+                    eventList.add([type: item.category, name: item.title, when: toDateTime(item.date)])
+                }
+                else if (item.title == SHMINI_ATZERET) {
+                    // There is no "Erev" shmini atzeret, so offset it manually
+                    Date eventDate = toDateTime(item.date)
+                    Calendar offsetCal = Calendar.getInstance()
+                    offsetCal.setTime(eventDate)
+                    offsetCal.add(Calendar.DAY_OF_MONTH, -1)
+                    eventList.add([type: item.category, name: "Erev " + item.title, when: offsetCal.getTime()])
+                }
+            }
         }
         
         if (data["test"] != null) {
@@ -568,6 +583,10 @@ def shabbatEnd() {
     restorePreviousType(HOLIDAY, true)
     if (preferredTime != REGULAR)
         restorePreviousManualType()
+    
+    // For Sukkot, reset the holidayDay
+    state.holidayDay = -1
+    sendEvent("name": "holidayDay", "value": state.holidayDay)
 }
 
 void specialHolidayEnd(boolean fireEvent = true) {
@@ -584,11 +603,19 @@ void specialHolidayEnd(boolean fireEvent = true) {
 void fireSpecialHolidayEvent(String nextSpecialHoliday) {
     if (debugLogging) log.debug "fireSpecialHolidayEvent ${nextSpecialHoliday}"
     if (nextSpecialHoliday == null || nextSpecialHoliday.isEmpty()) {
+        state.holidayDay = -1
         sendEvent("name": "specialHoliday", "value": NONE)
     }
     else {
+        if (state.holidayDay <= 0)
+            state.holidayDay = 1
+        else
+            state.holidayDay++
+            
         sendEvent("name": "specialHoliday", "value": nextSpecialHoliday)
     }
+    
+    sendEvent("name": "holidayDay", "value": state.holidayDay)
 }
 
 def havdalahMade() {
