@@ -77,6 +77,7 @@ Exposed states
 * activeType - which type of Shabbat is currently active. Values: Plag, Early, Regular
 * havdalah - what type of Havdalah is currently required. Values: None, Fire, No Fire.  This state is updated when Shabbat/Yom Tov ends and is set to "None" after a configured time (default 60 minutes).  You may also set it to "None" manually by using the havdalahMade() command.
 * specialHoliday - which holiday it currently is that may require special treatment (if any). Values (if set): Pesach, Shavuot, Sukkot, Rosh Hashana, Yom Kippur, Shmini Atzeret
+* holidayDay - for holidays, what day of yom tov it is.  This is -1 when there is no current holiday.  It will usually be 1 or 2, but may be 3 if the holiday is Thursday and Friday (in which case Shabbat will be day 3).
 
 All times are in milliseconds since the epoch. Times do not update for the following week until Shabbat ends.
 
