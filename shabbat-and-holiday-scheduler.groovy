@@ -92,11 +92,6 @@ List<String> getModeOptions() {
 
 def installed() {
     fullReset()
-    runIn(300, debugOff)
-}
-
-def debugOff() {
-    device.updateSetting("debugLogging", [value: "false", type: "bool"])
 }
 
 def createStateMap() {
