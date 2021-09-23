@@ -392,7 +392,7 @@ def scheduleNextShabbatEvent() {
             else if (data.name.contains(YOM_KIPPUR)) {
                 state.specialHoliday = YOM_KIPPUR
             }
-            else if (data.name == SHMINI_ATZERET) {
+            else if (data.name.contains(SHMINI_ATZERET)) {
                 state.specialHoliday = SHMINI_ATZERET
             }
             
