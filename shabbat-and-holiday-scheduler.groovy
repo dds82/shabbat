@@ -185,6 +185,8 @@ def configure() {
 
 def updated() {
     if (refreshOnSave)
+        refresh()
+    else
         initialize()
  }
 
@@ -246,6 +248,9 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
     String geo = (tz != null && latitude != null && longitude != null ? "pos" : zip != null ? "zip" : "none")
     String locationParams = ""
     
+    Calendar cal = Calendar.getInstance()
+    int year = cal.get(Calendar.YEAR)
+    
     switch (geo) {
         case "pos":
             locationParams = String.format("latitude=%s&longitude=%s&tzid=%s", latitude.toString(), longitude.toString(), tz.getID())
@@ -260,7 +265,7 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
             return
     }
     
-    String url = String.format("https://www.hebcal.com/hebcal/?v=1&cfg=json&i=%s&maj=on&min=off&mod=off&nx=off&year=now&month=x&ss=off&mf=off&c=on&geo=%s&%s&M=on&s=off&b=%d", (israel ? "on" : "off"), geo, locationParams, candlelightingoffset)
+    String url = String.format("https://www.hebcal.com/hebcal/?v=1&cfg=json&i=%s&maj=on&min=off&mod=off&nx=off&year=%d&month=x&ss=off&mf=off&c=on&geo=%s&%s&M=on&s=off&b=%d", (israel ? "on" : "off"), year, geo, locationParams, candlelightingoffset)
     
     if (debugLogging)
         log.debug "url is " + url
