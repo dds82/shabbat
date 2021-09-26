@@ -73,6 +73,7 @@ preferences
         input name: "startMode", type: "enum", title: "Mode at Shabbat Start", required:true, options: getModeOptions(), defaultValue: "Shabbat"
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
         input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: "Away"
+        input name: "israel", type: "bool", title: "Israeli Yom Tov Schedule", defaultValue: false
         input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this much time", required: false, defaultValue: 60, description: "Enter minutes, or 0 to disable this feature"
         input name: "preferredTime", type: "enum", title: "Preferred Shabbat Time", options: [PLAG, EARLY, REGULAR], description: "Preferred time to make Shabbat", defaultValue: REGULAR
         input name: "makerUrl", type: "string", title: "Maker API base URL", required: false, description: "The base URL for the maker API, up to and including 'devices/'"
@@ -223,7 +224,7 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
             return
     }
     
-    String url = String.format("https://www.hebcal.com/hebcal/?v=1&cfg=json&maj=%s&min=off&mod=off&nx=off&year=now&month=%d&ss=off&mf=off&c=on&geo=%s&%s&M=on&s=off&b=%d", (detectChanuka ? "off" : "on"), month + 1, geo, locationParams, candlelightingoffset)
+    String url = String.format("https://www.hebcal.com/hebcal/?v=1&cfg=json&i=%s&maj=%s&min=off&mod=off&nx=off&year=now&month=%d&ss=off&mf=off&c=on&geo=%s&%s&M=on&s=off&b=%d", (israel ? "on" : "off"), (detectChanuka ? "off" : "on"), month + 1, geo, locationParams, candlelightingoffset)
     
     if (debugLogging)
         log.debug "url is " + url
