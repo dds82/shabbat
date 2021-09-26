@@ -276,7 +276,9 @@ def scheduleUpdater(response, data) {
                     Calendar offsetCal = Calendar.getInstance()
                     offsetCal.setTime(eventDate)
                     offsetCal.add(Calendar.DAY_OF_MONTH, -1)
-                    eventList.add([type: item.category, name: "Erev " + item.title, when: offsetCal.getTime()])
+                    
+                    // Add it as one before the end because it needs to be before the candles event from the previous day
+                    eventList.add(eventList.size() - 1, [type: item.category, name: "Erev " + item.title, when: offsetCal.getTime()])
                 }
             }
         }
