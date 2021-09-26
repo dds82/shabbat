@@ -107,7 +107,7 @@ def createStateMap() {
  }
 
 def scheduleFetchTask() {     
-    String scheduleStr = String.format("%d %d %d 1 * ?", random.nextInt(60), random.nextInt(59) + 1, random.nextInt(6))
+    String scheduleStr = String.format("%d %d %d 1 1 ?", random.nextInt(60), random.nextInt(59) + 1, random.nextInt(6))
      if (debugLogging)
          log.debug "schedule fetcher cron string is " + scheduleStr
      
@@ -200,9 +200,6 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
     }
     
     state.expectEmptyList = false
-    Calendar cal = Calendar.getInstance()
-    int month = cal.get(Calendar.MONTH)
-    final boolean detectChanuka = month == Calendar.NOVEMBER || month == Calendar.DECEMBER || month == Calendar.JANUARY
     TimeZone tz = location.timeZone
     BigDecimal latitude = location.latitude
     BigDecimal longitude = location.longitude
@@ -224,7 +221,7 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
             return
     }
     
-    String url = String.format("https://www.hebcal.com/hebcal/?v=1&cfg=json&i=%s&maj=%s&min=off&mod=off&nx=off&year=now&month=%d&ss=off&mf=off&c=on&geo=%s&%s&M=on&s=off&b=%d", (israel ? "on" : "off"), (detectChanuka ? "off" : "on"), month + 1, geo, locationParams, candlelightingoffset)
+    String url = String.format("https://www.hebcal.com/hebcal/?v=1&cfg=json&i=%s&maj=on&min=off&mod=off&nx=off&year=now&month=x&ss=off&mf=off&c=on&geo=%s&%s&M=on&s=off&b=%d", (israel ? "on" : "off"), geo, locationParams, candlelightingoffset)
     
     if (debugLogging)
         log.debug "url is " + url
@@ -553,11 +550,11 @@ void specialHolidayStart() {
 }
 
 def shabbatEnd() {
-    String aish = HAVDALAH_NO_FIRE    
-    log.info "shabbatEnd setting mode to " + endMode
-     
+    String aish = HAVDALAH_NO_FIRE     
     boolean unset = location.getMode() != endMode
+    
     if (unset) {
+        log.info "shabbatEnd setting mode to " + endMode
         location.setMode(endMode)
     
         Calendar cal = Calendar.getInstance()
