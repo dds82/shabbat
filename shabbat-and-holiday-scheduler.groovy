@@ -107,7 +107,13 @@ def createStateMap() {
      createStateMap()
      
      boolean refetch = false
-     if (state.eventList == null || state.eventList.isEmpty()) {
+     if (state.nextEventTime == null) {
+         if (debugLogging)
+             log.debug "initialize(), state has no next event time, re-fetching"
+         
+         refetch = true
+     }
+     else if (state.eventList == null || state.eventList.isEmpty()) {
          Date pendingEvent = objectToDateTime(state.nextEventTime)
          if (pendingEvent != null && pendingEvent.getTime() > now()) {
              if (debugLogging)
@@ -115,14 +121,16 @@ def createStateMap() {
          }
          else {
              if (debugLogging)
-                 log.debug "initialize(), state event list has no data"
+                 log.debug "initialize(), state event list has no data, re-fetching"
          
              refetch = true
-            fetchSchedule()
          }
      }
      
-     if (!refetch) {
+     if (refetch) {
+         fetchSchedule()
+     }
+     else {
          if (debugLogging)
              log.debug "initialize(), state event list has data, not re-fetching"
          
@@ -167,6 +175,7 @@ def fullReset() {
     state.specialHoliday = null
     state.expectEmptyList = true
     state.eventList = null
+    state.nextEventTime = null
     initialize()
 }
 
