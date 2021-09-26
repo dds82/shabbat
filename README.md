@@ -87,7 +87,7 @@ Why is Pesach only set for the first days?
 * Because I wrote this for myself, and for my use cases, there's no need to treat the last days of Pesach any differently then a regular Shabbat.
 
 Why is there no Simchat Torah?
-* Because it's continuous with and no different than Shmini Atzeret.  You can detect Simchat Torah outside of Israel by looking for specialHoliday="Shmini Atzeret" and holidayDay=2.
+* Because it's continuous with and no different than Shmini Atzeret (in Israel, it's the same day).  You can detect Simchat Torah outside of Israel by looking for specialHoliday="Shmini Atzeret" and holidayDay=2.
 
 Known issues
 --
