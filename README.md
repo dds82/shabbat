@@ -1,5 +1,5 @@
 # Shabbat and Holiday Scheduler
-Hubitat virtual device driver to schedule shabbat/yom tov start and end events and change location mode automatically based on the Hub's configured location data.  Minimum required platform version is 2.2.8.141.
+Hubitat virtual device driver to schedule Shabbat/Yom Tov start and end events and change location mode automatically based on the Hub's configured location data.
 
 Why a device instead of an app?
 --
@@ -7,9 +7,9 @@ So it can expose extended state information to other apps that want to use it.  
 
 How it works
 --
-On the first day of every month, at a random time between midnight and 6am, uses the HebCal API to get the candle lighting and havdalah times for that entire month.  If this fails, it  retries every 30 minutes until it's successful.
+On the first day of every secular year, at a random time between midnight and 6am, uses the HebCal API to get the candle lighting and havdalah times for the entire year.  If this fails, it  retries every 30 minutes until it's successful.
 
-The schedule data is not saved to the database, so it also queries HebCal after every Hub reboot (with the same retry logic).
+As of v1.2.0, the schedule data is saved to the database, so it persists across Hub reboots.  If you change the Hub's location settings, you must issue a Refresh command on the Shabbat device to re-fetch the data for the new location.
 
 Required setup
 --
@@ -87,7 +87,7 @@ Why is Pesach only set for the first days?
 * Because I wrote this for myself, and for my use cases, there's no need to treat the last days of Pesach any differently then a regular Shabbat.
 
 Why is there no Simchat Torah?
-* Because it's continuous with and no different than Shmini Atzeret.
+* Because it's continuous with and no different than Shmini Atzeret.  You can detect Simchat Torah outside of Israel by looking for specialHoliday="Shmini Atzeret" and holidayDay=2.
 
 Known issues
 --
