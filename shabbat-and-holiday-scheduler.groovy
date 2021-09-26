@@ -33,7 +33,6 @@ import java.text.SimpleDateFormat
 @Field static final String HAVDALAH_NO_FIRE = "No Fire"
 
 @Field static final Random random = new Random()
-@Field static final Map<String, List> eventLists = new ConcurrentHashMap<>()
 
 @Field static final Set fetchInProgress = new HashSet<>()
 
@@ -98,12 +97,42 @@ def installed() {
 def createStateMap() {
     if (state.savedTypes == null)
          state.savedTypes = new HashMap()
+    
+    if (state.eventList == null)
+        state.eventList = new ArrayList()
 }
  
  def initialize() {
      doUnschedule()
      createStateMap()
-    fetchSchedule()
+     
+     boolean refetch = false
+     if (state.eventList == null || state.eventList.isEmpty()) {
+         Date pendingEvent = objectToDateTime(state.nextEventTime)
+         if (pendingEvent != null && pendingEvent.getTime() > now()) {
+             if (debugLogging)
+                 log.debug "initialize(), state event list has no data but pending event is in the future, not re-fetching"
+         }
+         else {
+             if (debugLogging)
+                 log.debug "initialize(), state event list has no data"
+         
+             refetch = true
+            fetchSchedule()
+         }
+     }
+     
+     if (!refetch) {
+         if (debugLogging)
+             log.debug "initialize(), state event list has data, not re-fetching"
+         
+         try {
+             schedulePendingEvent()
+         }
+         finally {
+             scheduleFetchTask()
+         }
+     }
  }
 
 def scheduleFetchTask() {     
@@ -120,7 +149,7 @@ def refresh() {
 
 def unscheduleAllEvents() {
     doUnschedule()
-    List eventList = eventLists.get(device.id)
+    List eventList = state.eventList
     if (eventList != null)
         eventList.clear()
     
@@ -136,6 +165,8 @@ def fullReset() {
     sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
     state.initializing = true
     state.specialHoliday = null
+    state.expectEmptyList = true
+    state.eventList = null
     initialize()
 }
 
@@ -150,7 +181,6 @@ def updated() {
 
 def uninstalled() {
     doUnschedule()
-    eventLists.remove(device.id)
 }
 
 def doUnschedule() {
@@ -168,7 +198,7 @@ def forceHoliday(String holiday) {
 
 def testEvent(String eventType, BigDecimal delay, String holiday) {
     log.info "Received test request: eventType=${eventType}, delay=${delay}, holiday=${holiday}"
-    List eventList = eventLists.get(device.id)
+    List eventList = state.eventList
     if (eventList != null && state.nextEventTest) {
         for (int i = 0; i < eventList.size(); i++) {
             def event = eventList.get(i)
@@ -252,10 +282,10 @@ def scheduleUpdater(response, data) {
             return
         }
     
-        List eventList = eventLists.get(device.id)
+        List eventList = state.eventList
         if (eventList == null) {
             eventList = new ArrayList()
-            eventLists.put(device.id, eventList)
+            state.eventList = eventList
         }
         else {
             eventList.clear()
@@ -334,7 +364,7 @@ int dayCompare(long time1, long time2) {
 def scheduleNextShabbatEvent() {
     state.nextEventTest=false
     long currentTime = now()
-    List eventList = eventLists.get(device.id)
+    List eventList = state.eventList
     
     if ((eventList == null || eventList.isEmpty())) {
         if (!state.expectEmptyList) {
@@ -362,10 +392,11 @@ def scheduleNextShabbatEvent() {
             log.debug "Current event type is " + currentEventType
         
         boolean old = false
-        if (data.when.getTime() < currentTime && !data["isTest"]) {            
+        Date eventTime = objectToDateTime(data.when)
+        if (eventTime.getTime() < currentTime && !data["isTest"]) {            
             old = true
             hadOldEvents = true
-            if (debugLogging) log.debug "Old event found at ${data.when}, current time is ${currentTime}"
+            if (debugLogging) log.debug "Old event found at ${eventTime}, current time is ${currentTime}"
         }
         
         if (currentEventType == HOLIDAY) {
@@ -391,7 +422,7 @@ def scheduleNextShabbatEvent() {
                 state.specialHoliday = SHMINI_ATZERET
             }
             
-            mostRecentHolidayComp = dayCompare(data.when.getTime(), currentTime)
+            mostRecentHolidayComp = dayCompare(eventTime.getTime(), currentTime)
         }
         else {
             String type = data.type
@@ -408,22 +439,11 @@ def scheduleNextShabbatEvent() {
                     continue
             }
             
-            // This code was for an old HebCal bug where they didn't report Havdalah events on Chanuka.  That seems to be resolved
-            /*Calendar cal = Calendar.getInstance()
-            cal.setTime(data.when)
-            
-            int month = cal.get(Calendar.MONTH)
-            final boolean detectChanuka = month == Calendar.NOVEMBER || month == Calendar.DECEMBER || month == Calendar.JANUARY
-            
-            if (detectChanuka && cal.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY && type == CANDLES) {
-                type = HAVDALAH
-            }*/
-            
             if (hadOldEvents && mostRecentHolidayComp < 0)
                 fireSpecialHolidayEvent(state.specialHoliday)
             
             state.nextEventType = type
-            state.nextEventTime = data.when
+            state.nextEventTime = objectToDateTime(data.when)
             if (data["isTest"])
                 state.nextEventTest = true
             
@@ -517,7 +537,7 @@ def schedulePendingEvent() {
         log.debug "No pending event found"
     }
     
-    List eventList = eventLists.get(device.id)
+    List eventList = state.eventList
     if (debugLogging) {
         log.debug "schedulePendingEvent Events remaining: ${eventList}"
     }
@@ -929,13 +949,24 @@ Date getActiveTime() {
     if (debugLogging)
         log.debug "Active time for ${activeType} is ${time}"
     
+    return objectToDateTime(time)
+}
+
+Date objectToDateTime(time) {
     if (time != null) {
         if (time instanceof BigDecimal)
             time = new Date(time.longValue())
         else if (time instanceof Number)
             time = new Date(time.longValue())
-        else if (time instanceof String)
-            time = new Date(Long.parseLong(time))
+        else if (time instanceof String) {
+            try {
+                time = new Date(Long.parseLong(time))
+            }
+            catch (NumberFormatException e) {
+                // Failed to convert a timestamp, we'll try ISO format
+                time = toDateTime(time)
+            }
+        }
     
         if (!(time instanceof Date))
             time = toDateTime(time)
