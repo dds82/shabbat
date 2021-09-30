@@ -564,12 +564,15 @@ def schedulePendingEvent() {
 
 def shabbatStart() {
     if (notWhen != null && location.getMode() != notWhen) {
+        log.info "shabbatStart holiday=${state.specialHoliday}"
+        
         if (location.getMode() != startMode) {
             havdalahMade()
-            log.info "shabbatStart setting mode to ${startMode}, holiday=${state.specialHoliday}"
+            log.info "shabbatStart setting mode to ${startMode}"
             location.setMode(startMode)
-            specialHolidayStart()
         }
+        
+        specialHolidayStart()
     }
     else {
         if (debugLogging)
