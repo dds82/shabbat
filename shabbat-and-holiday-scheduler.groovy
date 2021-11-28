@@ -588,7 +588,7 @@ void specialHolidayStart() {
 
 def shabbatEnd() {
     String aish = HAVDALAH_NO_FIRE     
-    boolean unset = location.getMode() != endMode
+    boolean unset = location.getMode() != endMode && (notWhen == null || location.getMode() != notWhen)
     
     if (unset) {
         log.info "shabbatEnd setting mode to " + endMode
