@@ -743,7 +743,10 @@ def updateActiveTime(type, boolean forceReschedule = true) {
 }
 
 def updateActiveTime(type, regular, boolean timeChanged = true) {
-    int time = (regular.get(Calendar.HOUR_OF_DAY) * 100) + regular.get(Calendar.MINUTE)
+    int regMin = regular.get(Calendar.MINUTE)
+    double regFraction = (double)regMin / 60
+    int regPct = Math.floor(regFraction * 100)
+    int time = (regular.get(Calendar.HOUR_OF_DAY) * 100) + regPct
     
     // regular
     def regularTime = regular.getTimeInMillis()
@@ -768,7 +771,11 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     if (debugLogging)
         log.debug "Early time is " + regular.getTime()
     
-    int earlyTimeCode = (regular.get(Calendar.HOUR_OF_DAY) * 100) + regular.get(Calendar.MINUTE)
+    int earlyMin = regular.get(Calendar.MINUTE)
+    double earlyFraction = (double)earlyMin / 60
+    int earlyPct = Math.floor(earlyFraction * 100)
+    
+    int earlyTimeCode = (regular.get(Calendar.HOUR_OF_DAY) * 100) + earlyPct
     
     def activeTime = null
     def prevEarlyOption = state.hasEarlyOption
@@ -777,8 +784,7 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
         saveType(MANUAL_EARLY, type)
     }
     
-    // Minutes are 0-59, so to normalize the difference, we need to subtract 40 from the mathematical difference
-    int codeDiff = earlyTimeCode - time - 40
+    int codeDiff = earlyTimeCode - time
     
     if (debugLogging) {
         log.debug "Early time code is " + earlyTimeCode
