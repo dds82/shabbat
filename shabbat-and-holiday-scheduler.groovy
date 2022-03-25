@@ -797,7 +797,9 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     }
     
     def eventDay = regular.get(Calendar.DAY_OF_WEEK)
-    boolean earlyOption = codeDiff <= 10 && eventDay == 6 && state.specialHoliday == null
+    
+    // A code diff of 17 corresponds to about 10 minutes
+    boolean earlyOption = codeDiff <= 17 && eventDay == 6 && state.specialHoliday == null
     if (earlyOption) {
         if (timeChanged && prevEarlyOption != null && prevEarlyOption.booleanValue() != earlyOption) {
             type = getPreviousType(SEASONAL)
