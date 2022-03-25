@@ -75,7 +75,8 @@ preferences
         input name: "israel", type: "bool", title: "Israeli Yom Tov Schedule", defaultValue: false
         input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this much time", required: false, defaultValue: 60, description: "Enter minutes, or 0 to disable this feature"
         input name: "preferredTime", type: "enum", title: "Preferred Shabbat Time", options: [PLAG, EARLY, REGULAR], description: "Preferred time to make Shabbat", defaultValue: REGULAR
-        input name: "makerUrl", type: "string", title: "Maker API base URL", required: false, description: "The base URL for the maker API, up to and including 'devices/'"
+        input name: "makerApiAppID", type: "string", title: "Maker API App ID", required: false, description: "The Maker API App's app ID.  For example: https://cloud.hubitat.com/api/[UUID]/apps/[AppID]..."
+        input name: "hubUUID", type: "string", title: "Hub UUID", required: false, description: "The Hub's UUID for the maker API, for cloud access.  For example: https://cloud.hubitat.com/api/[UUID]/apps/[AppID]..."
         input name: "accessToken", type: "string", title: "Maker API access token", required: false, description: "Access token for the maker API"
         input name: "debugLogging", type: "bool", title: "Debug Logging", defaultValue: true
         input name: "refreshOnSave", type: "bool", title: "Refresh on Save", required: false, description: "If you don't know what this does, leave it turned ON", defaultValue: true
@@ -834,39 +835,59 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
 }
 
 String declareJavascriptFunction(deviceid, String command) {
-    String url = makerUrl + deviceid + "/" + command + "?access_token=" + accessToken
-    String s = "var xhttp = new XMLHttpRequest();"
-    s += "xhttp.open(\"GET\", \"" + url + "\", true);"
-    s += "xhttp.send();"
+    String urlBuilder = "a=\"" + makerApiAppID + "\";"
+    urlBuilder += "l=window.location.origin;"
+    urlBuilder += "if (l.includes(\"cloud.hubitat.com\")) {"
+    urlBuilder += "l+=\"/api/" + hubUUID + "/apps/\"+a;"
+    urlBuilder += "}"
+    urlBuilder += "else {"
+    urlBuilder += "l+=\"/apps/api/\"+a;"
+    urlBuilder += "}"
+    urlBuilder += "l+=\"/devices/" + deviceid + "/"+ command + "\";"
+    
+    if (debugLogging)
+        log.debug "urlBuilder length = " + urlBuilder.length()
+    
+    String s = urlBuilder + "h=new XMLHttpRequest();"
+    s += "h.open(\"GET\",l+\"?access_token=" + accessToken + "\", true);"
+    s += "h.send();"
+    
+    if (debugLogging)
+        log.debug "s length = " + s.length()
+    
     return s
 }
 
 String clickableBegin(String command) {
     if (makerUrl != null && accessToken != null)
-        return "<div style=\"padding-bottom:12px\" onclick='javascript:" + declareJavascriptFunction(device.id, command) + "'>"
+        return "<div onclick='javascript:" + declareJavascriptFunction(device.id, command) + "'>"
     
-    return "<div style=\"padding-bottom:12px\">"
+    return "<div>"
 }
 
 def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regularTime, String activeType) {
     def times
     
-    SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd @ h:mm a")
     final String clickableEnd = "</div>"
     
-    final String headerBegin = "<span style=\"border: 2px outset\">"
+    final String headerBegin = "<span style=\"border:2px outset\">"
     final String headerEnd = "</span>"
     
-    final String dimBegin = "<i>"
-    final String dimEnd = "</i>"
+    final String dimBegin = ""
+    final String dimEnd = ""
         
     if (earlyOption) {
-        String text = clickableBegin("plag")
+        SimpleDateFormat smf = new SimpleDateFormat("MMM dd")
+        SimpleDateFormat sdf = new SimpleDateFormat("h:mm")
+        
+        // For the month and day, it doesn't matter which date is formatted
+        String text = smf.format(new Date(plagTime)) + "<br/>"
+        text += clickableBegin("plag")
         if (activeType == "Plag")
             text += headerBegin
         else
             text += dimBegin
-        text += "Plag: " + sdf.format(new Date(plagTime))
+        text += "P: " + sdf.format(new Date(plagTime))
         if (activeType == "Plag")
             text += headerEnd
         else
@@ -879,7 +900,7 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
             text += headerBegin
         else
             text += dimBegin
-        text += "Early: " + sdf.format(new Date(earlyTime))
+        text += "E: " + sdf.format(new Date(earlyTime))
         if (activeType == "Early")
             text += headerEnd
         else
@@ -892,7 +913,7 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
             text += headerBegin
         else
             text += dimBegin
-        text += "Zman: " + sdf.format(new Date(regularTime))
+        text += "Z: " + sdf.format(new Date(regularTime))
         if (activeType == "Regular")
             text += headerEnd
         else
@@ -905,13 +926,19 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
     else {
         String text = state.specialHoliday
         if (text != null) {
-            text += "<br /><br />"
+            text += ": "
         }
         else text = ""
         
+        SimpleDateFormat smf = new SimpleDateFormat("EEE MMM dd")
+        SimpleDateFormat sdf = new SimpleDateFormat("h:mm a")
+        text += smf.format(new Date(regularTime)) + "<br/><br/>"
         text += sdf.format(new Date(regularTime))
         times = text
     }
+    
+    if (debugLogging)
+        log.debug "Times length = " + times.length()
     
     sendEvent("name":"times", "value": times)
 }
