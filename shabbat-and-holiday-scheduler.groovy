@@ -746,8 +746,10 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     
     // regular
     def regularTime = regular.getTimeInMillis()
-    if (debugLogging)
+    if (debugLogging) {
         log.debug "Regular time is " + regular.getTime()
+        log.debug "Regular time code is " + time
+    }
     
     // plag
     regular.add(Calendar.MINUTE, -plagoffset.intValue())
@@ -774,8 +776,11 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
         saveType(MANUAL_EARLY, type)
     }
     
-    int codeDiff = earlyTimeCode - time
+    // Minutes are 0-59, so to normalize the difference, we need to subtract 40 from the mathematical difference
+    int codeDiff = earlyTimeCode - time - 40
+    
     if (debugLogging) {
+        log.debug "Early time code is " + earlyTimeCode
         log.debug "codeDiff=${codeDiff}"
     }
     
