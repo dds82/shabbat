@@ -1,6 +1,8 @@
 # Shabbat and Holiday Scheduler
 Hubitat virtual device driver to schedule Shabbat/Yom Tov start and end events and change location mode automatically based on the Hub's configured location data.
 
+Available in Hubitat Package Manager. If you are installing this for the first time, I strongly recommend you use that.
+
 Why a device instead of an app?
 --
 So it can expose extended state information to other apps that want to use it.  Read on for more information about what's exposed.
