@@ -264,6 +264,9 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
     String locationParams = ""
     
     Calendar cal = Calendar.getInstance()
+    if (state.timeOverride != null)
+        cal.setTimeInMillis(state.timeOverride)
+    
     int year = cal.get(Calendar.YEAR)
     
     switch (geo) {
@@ -385,7 +388,7 @@ def scheduleUpdater(response, data) {
         
         state.fetching = false
         if (state.modeAfterFetch != null && (notWhen == null || location.getMode() != notWhen)) {
-            if (location.getMode() != state.modeAfterFetct) {
+            if (location.getMode() != state.modeAfterFetch) {
                 log.info "Setting mode after fetch to ${state.modeAfterFetch}"
                 doSetMode(state.modeAfterFetch)
             }
@@ -447,6 +450,7 @@ def incrementForcedDate() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd")
         log.info "Time override is now ${sdf.format(newTime)}"
         
+        state.expectEmptyList = false
         if (newTime.after(nextEventTime)) {        
             if (state.nextEventType == CANDLES)
                 shabbatStart()
