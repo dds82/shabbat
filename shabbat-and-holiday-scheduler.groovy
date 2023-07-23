@@ -66,6 +66,7 @@ metadata {
         command "testEvent", [[name:"Type*", type:"ENUM", constraints: [CANDLES,HAVDALAH,HOLIDAY]], [name:"Delay*", type:"NUMBER", description:"How long from, in seconds, from when the testEvent button is pushed to schedule this event"], [name:"Holiday", type:"ENUM", constraints:[PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]]]
         command "forceHoliday", [[name:"Holiday", type:"ENUM", constraints:[NONE, PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]]]
         command "forceDate", [[name: "Year*", type:"STRING"], [name: "Month*", type:"STRING"], [name: "Day*", type:"STRING"]]
+        command "incrementForcedDate"
      }
  }
 
@@ -383,12 +384,26 @@ def scheduleUpdater(response, data) {
         }
         
         state.fetching = false
-        if (state.modeAfterFetch != null && (notWhen == null || location.getMode() != notWhen))
-            location.setMode(state.modeAfterFetch)
+        if (state.modeAfterFetch != null && (notWhen == null || location.getMode() != notWhen)) {
+            if (location.getMode() != state.modeAfterFetct) {
+                log.info "Setting mode after fetch to ${state.modeAfterFetch}"
+                doSetMode(state.modeAfterFetch)
+            }
+            else log.info "Not seting mode after fetch because it already was ${state.modeAfterFetch}"
+        }
         
         state.modeAfterFetch = null
         
         scheduleFetchTask()
+    }
+}
+
+void doSetMode(mode) {
+    if (state.timeOverride == null) {
+        location.setMode(mode)
+    }
+    else {
+        log.info "Not setting mode to ${mode} because time override is set"
     }
 }
 
@@ -414,6 +429,34 @@ def forceDate(String year, String month, String day) {
     Date date = fmt.parse(year+month+day)
     state.timeOverride = date.getTime()
     initialize()
+}
+
+def incrementForcedDate() {
+    if (state.timeOverride == null) log.error "Time override is not set"
+    else {
+        Calendar cal = Calendar.getInstance()
+        cal.setTimeInMillis(state.timeOverride)
+        cal.add(Calendar.DAY_OF_MONTH, 1)
+        Date newTime = cal.getTime()
+        state.timeOverride = newTime.getTime()
+        
+         Object nextEventTime = state.nextEventTime
+        if (!(nextEventTime instanceof Date))
+            nextEventTime = toDateTime(nextEventTime.toString())
+        
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd")
+        log.info "Time override is now ${sdf.format(newTime)}"
+        
+        if (newTime.after(nextEventTime)) {        
+            if (state.nextEventType == CANDLES)
+                shabbatStart()
+            else if (state.nextEventType == HAVDALAH)
+                shabbatEnd()
+            else
+                scheduleNextShabbatEvent()
+        }
+        else log.info "Time override is before next event time (${sdf.format(nextEventTime)})"
+    }
 }
 
 def scheduleNextShabbatEvent() {
@@ -630,7 +673,7 @@ def shabbatStart() {
             }
             else {
                 log.info "shabbatStart setting mode to ${startMode}"
-                location.setMode(startMode)
+                doSetMode(startMode)
             }
         }
         
@@ -672,7 +715,7 @@ def shabbatEnd() {
     }
     else if (unset) {
         log.info "shabbatEnd setting mode to " + endMode
-        location.setMode(endMode)
+        doSetMode(endMode)
     
         Calendar cal = Calendar.getInstance()
         if (cal.get(Calendar.DAY_OF_WEEK) == 7 || state.specialHoliday == YOM_KIPPUR) {
