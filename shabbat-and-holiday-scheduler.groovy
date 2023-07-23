@@ -290,6 +290,7 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
 
 def scheduleUpdater(response, data) {
     try {
+        state.fetching = true
         if (response.getStatus() != 200) {
             log.error "Error fetching schedule data: ${response.getStatus()}: ${response.getErrorData()}"
             state.expectEmptyList = true
@@ -380,6 +381,12 @@ def scheduleUpdater(response, data) {
         synchronized (fetchInProgress) {
             fetchInProgress.remove(device.id)
         }
+        
+        state.fetching = false
+        if (state.modeAfterFetch != null && (notWhen == null || location.getMode() != notWhen))
+            location.setMode(state.modeAfterFetch)
+        
+        state.modeAfterFetch = null
         
         scheduleFetchTask()
     }
@@ -617,8 +624,14 @@ def shabbatStart() {
         
         if (location.getMode() != startMode) {
             havdalahMade()
-            log.info "shabbatStart setting mode to ${startMode}"
-            location.setMode(startMode)
+            if (state.fetching) {
+                log.info "Fetching, recording mode ${startMode}"
+                state.modeAfterFetch = startMode
+            }
+            else {
+                log.info "shabbatStart setting mode to ${startMode}"
+                location.setMode(startMode)
+            }
         }
         
         specialHolidayStart()
@@ -653,7 +666,11 @@ def shabbatEnd() {
     String aish = HAVDALAH_NO_FIRE     
     boolean unset = location.getMode() != endMode && (notWhen == null || location.getMode() != notWhen)
     
-    if (unset) {
+    if (state.fetching) {
+        log.info "Fetching, recording mode ${endMode}"
+        state.modeAfterFetch = endMode
+    }
+    else if (unset) {
         log.info "shabbatEnd setting mode to " + endMode
         location.setMode(endMode)
     
