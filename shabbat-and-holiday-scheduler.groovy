@@ -20,7 +20,12 @@ import java.text.SimpleDateFormat
 @Field static final String YOM_KIPPUR = "Yom Kippur"
 @Field static final String SHMINI_ATZERET = "Shmini Atzeret"
 
+@Field static final String SHABBAT_HAGADOL = "Shabbat HaGadol"
+@Field static final String SHABBAT_SHUVA = "Shabbat Shuva"
+
 @Field static final String HOLIDAY = "holiday"
+@Field static final String MAJOR_HOLIDAY = "major"
+@Field static final String SHABBAT = "shabbat"
 @Field static final String CANDLES = "candles"
 @Field static final String HAVDALAH = "havdalah"
 
@@ -52,6 +57,7 @@ metadata {
         attribute "havdalah", "enum", [HAVDALAH_NONE, HAVDALAH_FIRE, HAVDALAH_NO_FIRE]
         attribute "specialHoliday", "enum", [NONE, PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET]
         attribute "holidayDay", "number" // Usually 1 or 2; may be 3 for Thur-Fri-Sat holidays. Or -1 if there is no holiday
+        attribute "specialShabbat", "enum", [NONE, SHABBAT_HAGADOL, SHABBAT_SHUVA]
         command "regular"
         command "plag"
         command "early"
@@ -59,6 +65,7 @@ metadata {
         command "unscheduleAllEvents"
         command "testEvent", [[name:"Type*", type:"ENUM", constraints: [CANDLES,HAVDALAH,HOLIDAY]], [name:"Delay*", type:"NUMBER", description:"How long from, in seconds, from when the testEvent button is pushed to schedule this event"], [name:"Holiday", type:"ENUM", constraints:[PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]]]
         command "forceHoliday", [[name:"Holiday", type:"ENUM", constraints:[NONE, PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]]]
+        command "forceDate", [[name: "Year*", type:"STRING"], [name: "Month*", type:"STRING"], [name: "Day*", type:"STRING"]]
      }
  }
 
@@ -169,15 +176,21 @@ def unscheduleAllEvents() {
 
 def fullReset() {
     log.info "fullReset"
+    resetData()
+    state.timeOverride = null
+    initialize()
+}
+
+void resetData() {
     sendEvent("name": "specialHoliday", "value": NONE)
     sendEvent("name": "holidayDay", "value": -1)
     sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
     state.initializing = true
     state.specialHoliday = null
+    state.specialShabbat = null
     state.expectEmptyList = true
     state.eventList = null
     state.nextEventTime = null
-    initialize()
 }
 
 def configure() {
@@ -266,7 +279,7 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
             return
     }
     
-    String url = String.format("https://www.hebcal.com/hebcal/?v=1&cfg=json&i=%s&maj=on&min=off&mod=off&nx=off&year=%d&month=x&ss=off&mf=off&c=on&geo=%s&%s&M=on&s=off&b=%d", (israel ? "on" : "off"), year, geo, locationParams, candlelightingoffset)
+    String url = String.format("https://www.hebcal.com/hebcal/?v=1&cfg=json&i=%s&maj=on&min=off&mod=off&nx=off&year=%d&month=x&s=off&leyning=off&ss=on&mf=off&c=on&geo=%s&%s&M=on&s=off&b=%d", (israel ? "on" : "off"), year, geo, locationParams, candlelightingoffset)
     
     if (debugLogging)
         log.debug "url is " + url
@@ -310,18 +323,30 @@ def scheduleUpdater(response, data) {
             if (item.category == CANDLES || item.category == HAVDALAH)
                 eventList.add([type: item.category, when: toDateTime(item.date)])
             else if (item.category == HOLIDAY) {
-                if (item.title.contains("Erev")) {
-                    eventList.add([type: item.category, name: item.title, when: toDateTime(item.date)])
-                }
-                else if (item.title == SHMINI_ATZERET) {
-                    // There is no "Erev" shmini atzeret, so offset it manually
-                    Date eventDate = toDateTime(item.date)
-                    Calendar offsetCal = Calendar.getInstance()
-                    offsetCal.setTime(eventDate)
-                    offsetCal.add(Calendar.DAY_OF_MONTH, -1)
+                if (item.subcat == MAJOR_HOLIDAY) {
+                    if (item.title.contains("Erev")) {
+                        eventList.add([type: item.category, name: item.title, when: toDateTime(item.date)])
+                    }
+                    else if (item.title == SHMINI_ATZERET) {
+                        // There is no "Erev" shmini atzeret, so offset it manually
+                        Date eventDate = toDateTime(item.date)
+                        Calendar offsetCal = Calendar.getInstance()
+                        offsetCal.setTime(eventDate)
+                        offsetCal.add(Calendar.DAY_OF_MONTH, -1)
                     
-                    // Add it as one before the end because it needs to be before the candles event from the previous day
-                    eventList.add(eventList.size() - 1, [type: item.category, name: "Erev " + item.title, when: offsetCal.getTime()])
+                        // Add it as one before the end because it needs to be before the candles event from the previous day
+                        eventList.add(eventList.size() - 1, [type: item.category, name: "Erev " + item.title, when: offsetCal.getTime()])
+                    }
+                }
+                else if (item.subcat == SHABBAT) {
+                    if (item.title.equalsIgnoreCase(SHABBAT_HAGADOL) || item.title.equalsIgnoreCase(SHABBAT_SHUVA)) {
+                        // Add it as one before the end because it needs to be before the candles event from the previous day
+                        Date eventDate = toDateTime(item.date)
+                        Calendar offsetCal = Calendar.getInstance()
+                        offsetCal.setTime(eventDate)
+                        offsetCal.add(Calendar.DAY_OF_MONTH, -1)
+                        eventList.add(eventList.size() - 1, [type: SHABBAT, name: item.title, when: offsetCal.getTime()])
+                    }
                 }
             }
         }
@@ -376,9 +401,18 @@ int dayCompare(long time1, long time2) {
     return result
 }
 
+def forceDate(String year, String month, String day) {
+    resetData()
+    SimpleDateFormat fmt = new SimpleDateFormat("yyyyMMdd")
+    Date date = fmt.parse(year+month+day)
+    state.timeOverride = date.getTime()
+    initialize()
+}
+
 def scheduleNextShabbatEvent() {
     state.nextEventTest=false
-    long currentTime = now()
+    long currentTime = state.timeOverride == null ? now() : state.timeOverride
+    
     List eventList = state.eventList
     
     if ((eventList == null || eventList.isEmpty())) {
@@ -390,6 +424,7 @@ def scheduleNextShabbatEvent() {
             state.specialHoliday = null
             state.nextEventType = null
             state.nextEventTime = null
+            state.specialShabbat = null
         }
         
         return
@@ -439,6 +474,9 @@ def scheduleNextShabbatEvent() {
             
             mostRecentHolidayComp = dayCompare(eventTime.getTime(), currentTime)
         }
+        else if (currentEventType == SHABBAT) {
+            state.specialShabbat = data.name
+        }
         else {
             String type = data.type
             
@@ -454,8 +492,12 @@ def scheduleNextShabbatEvent() {
                     continue
             }
             
-            if (hadOldEvents && mostRecentHolidayComp < 0)
-                fireSpecialHolidayEvent(state.specialHoliday)
+            if (hadOldEvents) {
+                if (mostRecentHolidayComp < 0)
+                    specialHolidayStart()
+                else
+                    updateSpecialShabbat()
+            }
             
             state.nextEventType = type
             state.nextEventTime = objectToDateTime(data.when)
@@ -515,10 +557,11 @@ def schedulePendingEvent() {
         }
         
         if (debugLogging) {
-            log.debug "schedulePendingEvent, nextEventTime is ${nextEventTime}"
+            log.debug "schedulePendingEvent, nextEventTime is ${nextEventTime}, regular time is ${state.regularTime}"
         }
         
-        if (nextEventTime.getTime() < now()) {
+        long timeCompare = state.timeOverride == null ? now() : state.timeOverride
+        if (nextEventTime.getTime() < timeCompare) {
             if (debugLogging)
                 log.debug "Pending event is in the past, executing immediately"
             
@@ -542,11 +585,16 @@ def schedulePendingEvent() {
             log.debug "next event is ${state.nextEventType} at ${nextEventTime}, holiday=${state.specialHoliday}"
         }
         
-        if (state.nextEventType == CANDLES) {
-            schedule(scheduleStr, shabbatStart)
+        try {
+            if (state.nextEventType == CANDLES) {
+                schedule(scheduleStr, shabbatStart)
+            }
+            else
+                schedule(scheduleStr, shabbatEnd)
         }
-        else
-            schedule(scheduleStr, shabbatEnd)
+        catch (Exception e) {
+            if (state.timeOverride == null) throw e
+        }
     }
     else if (debugLogging) {
         log.debug "No pending event found"
@@ -584,7 +632,21 @@ def shabbatStart() {
 }
 
 void specialHolidayStart() {
+    updateSpecialShabbat()
     fireSpecialHolidayEvent(state.specialHoliday)
+}
+
+void updateSpecialShabbat(boolean fireEvent = true) {
+    if (state.specialShabbat != null) {
+        if (fireEvent)
+            sendEvent("name": "specialShabbat", "value": state.specialShabbat)
+        
+        state.specialShabbat = null
+    }
+    else {
+        if (fireEvent)
+            sendEvent("name": "specialShabbat", "value": NONE)
+    }
 }
 
 def shabbatEnd() {
@@ -623,6 +685,7 @@ def shabbatEnd() {
 }
 
 void specialHolidayEnd(boolean fireEvent = true) {
+    updateSpecialShabbat(fireEvent)
     String nextSpecialHoliday = state.specialHoliday
     if (state.specialHoliday != SUKKOT) {
         nextSpecialHoliday = null
