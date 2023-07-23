@@ -79,6 +79,7 @@ Exposed states
 * activeType - which type of Shabbat is currently active. Values: Plag, Early, Regular
 * havdalah - what type of Havdalah is currently required. Values: None, Fire, No Fire.  This state is updated when Shabbat/Yom Tov ends and is set to "None" after a configured time (default 60 minutes).  You may also set it to "None" manually by using the havdalahMade() command.
 * specialHoliday - which holiday it currently is that may require special treatment (if any). Values (if set): Pesach, Shavuot, Sukkot, Rosh Hashana, Yom Kippur, Shmini Atzeret
+* specialShabbat - currently, this only detects Shabbat HaGadol and Shabbat Shuva
 * holidayDay - for holidays, what day of yom tov it is.  This is -1 when there is no current holiday.  It will usually be 1 or 2, but may be 3 if the holiday is Thursday and Friday (in which case Shabbat will be day 3).
 * times - this attribute is meant to be displayed in a dashboard tile. Fun fact: if you have installed the Maker API, and configured the app ID, hub UUID, and access token in the device, you can change the current week's time (Plag/Early/Zman) by clicking (or tapping) on it.
 
