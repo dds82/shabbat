@@ -184,6 +184,7 @@ def fullReset() {
 
 void resetData() {
     sendEvent("name": "specialHoliday", "value": NONE)
+    sendEvent("name": "specialShabbat", "value": NONE)
     sendEvent("name": "holidayDay", "value": -1)
     sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
     state.initializing = true
@@ -295,6 +296,7 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
 def scheduleUpdater(response, data) {
     try {
         state.fetching = true
+        state.queuedEvents = [:]
         if (response.getStatus() != 200) {
             log.error "Error fetching schedule data: ${response.getStatus()}: ${response.getErrorData()}"
             state.expectEmptyList = true
@@ -395,9 +397,25 @@ def scheduleUpdater(response, data) {
             else log.info "Not seting mode after fetch because it already was ${state.modeAfterFetch}"
         }
         
+        log.debug "Queued events: ${state.queuedEvents}"
+        state.queuedEvents.each {key, val ->
+            sendEvent("name": key, "value": val)
+        }
+        
         state.modeAfterFetch = null
+        state.queuedEvents = null
         
         scheduleFetchTask()
+    }
+}
+
+void sendEventIfNotFetching(Map event) {
+    if (state.fetching) {
+        log.debug "Queueing event ${event}"
+        state.queuedEvents[event.name] = event.value
+    }
+    else {
+        sendEvent("name": event.name, "value": event.value)
     }
 }
 
@@ -542,8 +560,6 @@ def scheduleNextShabbatEvent() {
                     if (debugLogging) log.debug "calling specialHolidayEnd(false) ${state.specialHoliday}"
                     specialHolidayEnd(false)
                 }
-                else if (type == CANDLES || mostRecentHolidayComp >= 0)
-                    continue
             }
             
             if (hadOldEvents) {
@@ -672,7 +688,7 @@ def shabbatStart() {
         if (location.getMode() != startMode) {
             havdalahMade()
             if (state.fetching) {
-                log.info "Fetching, recording mode ${startMode}"
+                log.info "Fetching, recording mode start ${startMode}"
                 state.modeAfterFetch = startMode
             }
             else {
@@ -699,13 +715,13 @@ void specialHolidayStart() {
 void updateSpecialShabbat(boolean fireEvent = true) {
     if (state.specialShabbat != null) {
         if (fireEvent)
-            sendEvent("name": "specialShabbat", "value": state.specialShabbat)
+            sendEventIfNotFetching("name": "specialShabbat", "value": state.specialShabbat)
         
         state.specialShabbat = null
     }
     else {
         if (fireEvent)
-            sendEvent("name": "specialShabbat", "value": NONE)
+            sendEventIfNotFetching("name": "specialShabbat", "value": NONE)
     }
 }
 
@@ -714,7 +730,7 @@ def shabbatEnd() {
     boolean unset = location.getMode() != endMode && (notWhen == null || location.getMode() != notWhen)
     
     if (state.fetching) {
-        log.info "Fetching, recording mode ${endMode}"
+        log.info "Fetching, recording mode end ${endMode}"
         state.modeAfterFetch = endMode
     }
     else if (unset) {
@@ -730,9 +746,9 @@ def shabbatEnd() {
         }
 
     
-        sendEvent("name": "havdalah", "value": aish)
+        sendEventIfNotFetching("name": "havdalah", "value": aish)
     }
-    else sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
+    else sendEventIfNotFetching("name": "havdalah", "value": HAVDALAH_NONE)
     
     specialHolidayEnd()
     
@@ -745,7 +761,7 @@ def shabbatEnd() {
     
     // For Sukkot, reset the holidayDay
     state.holidayDay = -1
-    sendEvent("name": "holidayDay", "value": state.holidayDay)
+    sendEventIfNotFetching("name": "holidayDay", "value": state.holidayDay)
 }
 
 void specialHolidayEnd(boolean fireEvent = true) {
@@ -764,7 +780,7 @@ void fireSpecialHolidayEvent(String nextSpecialHoliday) {
     if (debugLogging) log.debug "fireSpecialHolidayEvent ${nextSpecialHoliday}"
     if (nextSpecialHoliday == null || nextSpecialHoliday.isEmpty()) {
         state.holidayDay = -1
-        sendEvent("name": "specialHoliday", "value": NONE)
+        sendEventIfNotFetching("name": "specialHoliday", "value": NONE)
     }
     else {
         if (state.holidayDay <= 0)
@@ -772,10 +788,10 @@ void fireSpecialHolidayEvent(String nextSpecialHoliday) {
         else
             state.holidayDay++
             
-        sendEvent("name": "specialHoliday", "value": nextSpecialHoliday)
+        sendEventIfNotFetching("name": "specialHoliday", "value": nextSpecialHoliday)
     }
     
-    sendEvent("name": "holidayDay", "value": state.holidayDay)
+    sendEventIfNotFetching("name": "holidayDay", "value": state.holidayDay)
 }
 
 def havdalahMade() {
@@ -783,7 +799,7 @@ def havdalahMade() {
         log.debug "havdalahMade()"
     }
     
-    sendEvent("name": "havdalah", "value": HAVDALAH_NONE)
+    sendEventIfNotFetching("name": "havdalah", "value": HAVDALAH_NONE)
     unschedule(havdalahMade)
 }
 
@@ -792,8 +808,9 @@ def shabbatEventTriggered() {
 }
 
 def setRegularTime(long date) {
+    log.debug "setRegularTime ${new Date(date)}"
     state.regularTime = date
-    sendEvent("name":"regularTime", "value":date)
+    sendEventIfNotFetching("name":"regularTime", "value":date)
     def activeType = getActiveType()
 
     updateActiveTime(activeType, regularTimeOnCalendar(date))
@@ -962,10 +979,10 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     state.activeType = type
     state.earlyTime = earlyTime
     state.plagTime = plagTime
-    sendEvent("name":"activeType", "value":type)
-    sendEvent("name":"activeTime", "value":activeTime)
-    sendEvent("name":"earlyTime", "value":earlyTime)
-    sendEvent("name":"plagTime", "value":plagTime)
+    sendEventIfNotFetching("name":"activeType", "value":type)
+    sendEventIfNotFetching("name":"activeTime", "value":activeTime)
+    sendEventIfNotFetching("name":"earlyTime", "value":earlyTime)
+    sendEventIfNotFetching("name":"plagTime", "value":plagTime)
     updateTimes(earlyOption, earlyTime, plagTime, regularTime, type)
 }
 
@@ -1075,7 +1092,7 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
     if (debugLogging)
         log.debug "Times length = " + times.length()
     
-    sendEvent("name":"times", "value": times)
+    sendEventIfNotFetching("name":"times", "value": times)
 }
 
 Calendar regularTimeOnCalendar() {
