@@ -88,6 +88,7 @@ preferences
         input name: "accessToken", type: "string", title: "Maker API access token", required: false, description: "Access token for the maker API"
         input name: "debugLogging", type: "bool", title: "Debug Logging", defaultValue: true
         input name: "refreshOnSave", type: "bool", title: "Refresh on Save", required: false, description: "If you don't know what this does, leave it turned ON", defaultValue: true
+        input name: "shabbatstartoffset", type: "number", title: "Mode Switch Offset", required: false, defaultValue: 0, description: "Switch the Hub into Shabbat mode this many minutes before candle lighting"
     }
 }
 
@@ -647,6 +648,10 @@ def schedulePendingEvent() {
         
         Calendar cal = Calendar.getInstance()
         cal.setTime(nextEventTime)
+        
+        if (shabbatstartoffset != null && shabbatstartoffset > 0) {
+            cal.add(Calendar.MINUTE, -(shabbatstartoffset as int))
+        }
         
         String scheduleStr = String.format("%d %d %d %d %d ? %d", cal.get(Calendar.SECOND), cal.get(Calendar.MINUTE), cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
                 
