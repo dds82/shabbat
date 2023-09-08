@@ -631,6 +631,20 @@ def schedulePendingEvent() {
             log.debug "schedulePendingEvent, nextEventTime is ${nextEventTime}, regular time is ${state.regularTime}"
         }
         
+        Calendar cal = Calendar.getInstance()
+        cal.setTime(nextEventTime)
+        
+        if (shabbatstartoffset != null && shabbatstartoffset > 0 && location.getMode() != startMode) {
+            // The start offset shouldn't apply to the second day of a multi-day holiday
+            cal.add(Calendar.MINUTE, -(shabbatstartoffset as int))
+        }
+        
+        nextEventTime = cal.getTime()
+        
+        if (debugLogging) {
+            log.debug "schedulePendingEvent, after adjusting for start offset, nextEventTime is ${nextEventTime}"
+        }
+        
         long timeCompare = state.timeOverride == null ? now() : state.timeOverride
         if (nextEventTime.getTime() < timeCompare) {
             if (debugLogging)
@@ -644,14 +658,6 @@ def schedulePendingEvent() {
             }
             
             return
-        }
-        
-        Calendar cal = Calendar.getInstance()
-        cal.setTime(nextEventTime)
-        
-        if (shabbatstartoffset != null && shabbatstartoffset > 0 && location.getMode() != startMode) {
-            // The start offset shouldn't apply to the second day of a multi-day holiday
-            cal.add(Calendar.MINUTE, -(shabbatstartoffset as int))
         }
         
         String scheduleStr = String.format("%d %d %d %d %d ? %d", cal.get(Calendar.SECOND), cal.get(Calendar.MINUTE), cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
