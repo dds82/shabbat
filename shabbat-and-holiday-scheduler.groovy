@@ -649,7 +649,8 @@ def schedulePendingEvent() {
         Calendar cal = Calendar.getInstance()
         cal.setTime(nextEventTime)
         
-        if (shabbatstartoffset != null && shabbatstartoffset > 0) {
+        if (shabbatstartoffset != null && shabbatstartoffset > 0 && location.getMode() != startMode) {
+            // The start offset shouldn't apply to the second day of a multi-day holiday
             cal.add(Calendar.MINUTE, -(shabbatstartoffset as int))
         }
         
