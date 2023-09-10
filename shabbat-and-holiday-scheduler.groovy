@@ -1023,7 +1023,7 @@ String declareJavascriptFunction(deviceid, String command) {
 }
 
 String clickableBegin(String command) {
-    if (makerUrl != null && accessToken != null)
+    if (makerApiAppID != null && hubUUID != null && accessToken != null)
         return "<div onclick='javascript:" + declareJavascriptFunction(device.id, command) + "'>"
     
     return "<div>"
