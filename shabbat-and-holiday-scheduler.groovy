@@ -64,7 +64,7 @@ metadata {
         command "havdalahMade"
         command "unscheduleAllEvents"
         command "testEvent", [[name:"Type*", type:"ENUM", constraints: [CANDLES,HAVDALAH,HOLIDAY]], [name:"Delay*", type:"NUMBER", description:"How long from, in seconds, from when the testEvent button is pushed to schedule this event"], [name:"Holiday", type:"ENUM", constraints:[PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]]]
-        command "forceHoliday", [[name:"Holiday", type:"ENUM", constraints:[NONE, PESACH, SHAVUOT, SUKKOT, YOM_KIPPUR, SHMINI_ATZERET]]]
+        command "forceHoliday", [[name:"Holiday", type:"ENUM", constraints:[NONE, PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET]]]
         command "forceDate", [[name: "Year*", type:"STRING"], [name: "Month*", type:"STRING"], [name: "Day*", type:"STRING"]]
         command "incrementForcedDate"
      }
