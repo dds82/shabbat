@@ -52,6 +52,7 @@ metadata {
         attribute "earlyTime","number"
         attribute "plagTime","number"
         attribute "activeTime", "number"
+        attribute "activeTimeForDisplay", "string"
         attribute "times", "string"
         attribute "activeType", "enum", [REGULAR, PLAG, EARLY]
         attribute "havdalah", "enum", [HAVDALAH_NONE, HAVDALAH_FIRE, HAVDALAH_NO_FIRE]
@@ -996,6 +997,9 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     sendEventIfNotFetching("name":"earlyTime", "value":earlyTime)
     sendEventIfNotFetching("name":"plagTime", "value":plagTime)
     updateTimes(earlyOption, earlyTime, plagTime, regularTime, type)
+    
+    SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd h:mm a")
+    sendEventIfNotFetching("name":"activeTimeForDisplay", "value":sdf.format(activeTime))
 }
 
 String declareJavascriptFunction(deviceid, String command) {
