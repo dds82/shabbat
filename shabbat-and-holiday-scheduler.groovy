@@ -959,7 +959,10 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     boolean earlyOption = codeDiff <= 17 && eventDay == 6 && state.specialHoliday == null
     if (earlyOption) {
         if (timeChanged && prevEarlyOption != null && prevEarlyOption.booleanValue() != earlyOption) {
-            type = getPreviousType(SEASONAL)
+            def prevType = getPreviousType(SEASONAL)
+            if (prevType) {
+                type = prevType
+            }
             saveType(SEASONAL, null)
         }
         
