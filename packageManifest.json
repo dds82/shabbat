@@ -1,8 +1,8 @@
 {
   "packageName": "Shabbat and Holiday Scheduler",
   "author": "Daniel Segall (dds82)",
-  "version": "1.2.10",
-  "dateReleased": "2023-09-07",
+  "version": "1.2.11",
+  "dateReleased": "2024-12-07",
   "drivers": [
     {
       "id": "261d3ff7-6cd2-4861-9448-c0f3d05175fe",
