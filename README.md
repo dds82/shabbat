@@ -63,6 +63,7 @@ Supported holidays:
 Additionally, as of version 1.3.0:
 * Erev Purim
 * Purim
+* Erev Chanukah
 * Chanukah
 
 Example use case: on Pesach, your dining room light might need to turn off later than usual at night.
