@@ -22,6 +22,7 @@ import java.text.SimpleDateFormat
 @Field static final String YOM_KIPPUR = "Yom Kippur"
 @Field static final String SHMINI_ATZERET = "Shmini Atzeret"
 
+@Field static final String EREV_CHANUKAH = "Erev Chanukah"
 @Field static final String CHANUKAH = "Chanukah"
 @Field static final String CHANUKAH_END = "Chanukah Over"
 @Field static final String EREV_PURIM = "Erev Purim"
@@ -64,7 +65,7 @@ metadata {
         attribute "times", "string"
         attribute "activeType", "enum", [REGULAR, PLAG, EARLY]
         attribute "havdalah", "enum", [HAVDALAH_NONE, HAVDALAH_FIRE, HAVDALAH_NO_FIRE]
-        attribute "specialHoliday", "enum", [NONE, PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET, EREV_PURIM, PURIM, CHANUKAH]
+        attribute "specialHoliday", "enum", [NONE, PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET, EREV_PURIM, PURIM, EREV_CHANUKAH, CHANUKAH]
         attribute "holidayDay", "number" // Usually 1 or 2; may be 3 for Thur-Fri-Sat holidays. Or -1 if there is no holiday
         attribute "specialShabbat", "enum", [NONE, SHABBAT_HAGADOL, SHABBAT_SHUVA]
         command "regular"
@@ -307,6 +308,16 @@ Date addDays(Date date, int num) {
     return offsetCal.getTime()
 }
 
+Date atMidnight(Date date) {
+    Calendar offsetCal = Calendar.getInstance()
+    offsetCal.setTime(date)
+	offsetCal.set(Calendar.MILLISECOND, 0)
+    offsetCal.set(Calendar.SECOND, 0)
+    offsetCal.set(Calendar.MINUTE, 0)
+    offsetCal.set(Calendar.HOUR_OF_DAY, 0)
+    return offsetCal.getTime()
+}
+
 def scheduleUpdater(response, data) {
     try {
         state.fetching = true
@@ -348,9 +359,14 @@ def scheduleUpdater(response, data) {
                     boolean erev = item.title.contains(EREV)
                     boolean chanukah = item.title.contains(CHANUKAH)
                     boolean purim = item.title.contains(PURIM)
+                    boolean firstDayOfChanukah = chanukah && item.title.contains("1")
                     Date eventDate = toDateTime(item.date)
                     if (erev || chanukah || purim) {
-                        if (!chanukah || item.title.contains("1")) {
+                        if (firstDayOfChanukah) {
+                            eventList.add(eventList.size() - 1, [type: item.category, name: EREV_CHANUKAH, when: atMidnight(eventDate)])
+                        }
+                        
+                        if (!chanukah || firstDayOfChanukah) {
                         	eventList.add([type: item.category, name: chanukah ? CHANUKAH : item.title, when: eventDate])
                         }
                         
@@ -643,7 +659,13 @@ def scheduleRabbinicalHoliday(holiday, String actualName, boolean start) {
         log.debug "holiday cron string for ${holiday.name} is ${scheduleStr}"
     }
     
-    schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: ["name":actualName]])
+    long currentTime = now()
+    if (when.getTime() < currentTime) {
+        fireSpecialHolidayEvent(actualName, false)
+    }
+    else {
+    	schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: ["name":actualName]])
+    }
 }
 
 def updateSpecialHoliday(data) {
@@ -840,7 +862,7 @@ def shabbatEnd() {
 void specialHolidayEnd(boolean fireEvent = true) {
     updateSpecialShabbat(fireEvent)
     String nextSpecialHoliday = state.specialHoliday
-    if (state.specialHoliday != SUKKOT && state.specialHoliday != CHANUKAH && state.specialHoliday != PURIM && state.specialHoliday != EREV_PURIM) {
+    if (state.specialHoliday != SUKKOT && state.specialHoliday != CHANUKAH && state.specialHoliday != EREV_CHANUKAH && state.specialHoliday != PURIM && state.specialHoliday != EREV_PURIM) {
         nextSpecialHoliday = null
     }
     
