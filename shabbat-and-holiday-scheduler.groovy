@@ -221,11 +221,7 @@ def uninstalled() {
 }
 
 def doUnschedule() {
-    unschedule(fetchSchedule)
-    unschedule(shabbatStart)
-    unschedule(shabbatEnd)
-    unschedule(havdalahMade)
-    unschedule(updateSpecialHoliday)
+    unschedule()
 }
 
 def forceHoliday(String holiday) {
@@ -647,7 +643,7 @@ def scheduleRabbinicalHoliday(holiday, String actualName, boolean start) {
         log.debug "holiday cron string for ${holiday.name} is ${scheduleStr}"
     }
     
-    schedule(scheduleStr, updateSpecialHoliday, [data: ["name":actualName]])
+    schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: ["name":actualName]])
 }
 
 def updateSpecialHoliday(data) {
@@ -844,7 +840,7 @@ def shabbatEnd() {
 void specialHolidayEnd(boolean fireEvent = true) {
     updateSpecialShabbat(fireEvent)
     String nextSpecialHoliday = state.specialHoliday
-    if (state.specialHoliday != SUKKOT && state.specialHoliday != CHANUKAH && state.specialHoliday != PURIM) {
+    if (state.specialHoliday != SUKKOT && state.specialHoliday != CHANUKAH && state.specialHoliday != PURIM && state.specialHoliday != EREV_PURIM) {
         nextSpecialHoliday = null
     }
     
@@ -1026,7 +1022,7 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     def eventDay = regular.get(Calendar.DAY_OF_WEEK)
     
     // A code diff of 17 corresponds to about 10 minutes
-    boolean earlyOption = codeDiff <= 17 && eventDay == 6 && (state.specialHoliday == null || state.specialHoliday == PURIM)
+    boolean earlyOption = codeDiff <= 17 && eventDay == 6 && (state.specialHoliday == null || state.specialHoliday == PURIM || state.specialHoliday == EREV_PURIM)
     if (earlyOption) {
         if (timeChanged && prevEarlyOption != null && prevEarlyOption.booleanValue() != earlyOption) {
             type = getPreviousType(SEASONAL)
@@ -1163,7 +1159,7 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
     }
     else {
         String text = state.specialHoliday
-        if (text != null && text != CHANUKAH && text != PURIM) {
+        if (text != null && text != CHANUKAH && text != PURIM && text != EREV_PURIM) {
             text += ": "
         }
         else text = ""
