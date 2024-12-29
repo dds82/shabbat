@@ -520,6 +520,7 @@ def incrementForcedDate() {
 }
 
 def setSpecialHoliday(name) {
+    if (debugLogging) log.debug "setSpecialHoliday old=${state.specialHoliday} new=${name}"
     if (state.specialHoliday != name) {
         state.holidayDay = -1
     }
@@ -567,8 +568,10 @@ def scheduleNextShabbatEvent() {
         }
         
         if (currentEventType == HOLIDAY) {
-            saveCurrentType(HOLIDAY, true)
-            regular(false)
+            if (!isRabbinicalHoliday(data.name)) {
+                saveCurrentType(HOLIDAY, true)
+                regular(false)
+            }
             
             mostRecentHolidayComp = dayCompare(eventTime.getTime(), currentTime)
             if (data.name.contains(SHAVUOT)) {
@@ -655,6 +658,10 @@ def scheduleNextShabbatEvent() {
         state.expectEmptyList = true
         state.initializing = false
     }
+}
+
+boolean isRabbinicalHoliday(holiday) {
+    return holiday?.contains("Chanukah") || holiday?.contains("Purim")
 }
 
 def scheduleRabbinicalHoliday(holiday, String actualName, boolean start) {
@@ -812,7 +819,8 @@ def shabbatStart() {
 
 void specialHolidayStart() {
     updateSpecialShabbat()
-    fireSpecialHolidayEvent(state.specialHoliday)
+    if (!isRabbinicalHoliday(state.specialHoliday))
+    	fireSpecialHolidayEvent(state.specialHoliday)
 }
 
 void updateSpecialShabbat(boolean fireEvent = true) {
@@ -872,12 +880,13 @@ def shabbatEnd() {
 void specialHolidayEnd(boolean fireEvent = true) {
     updateSpecialShabbat(fireEvent)
     String nextSpecialHoliday = state.specialHoliday
-    if (state.specialHoliday != SUKKOT && state.specialHoliday != CHANUKAH && state.specialHoliday != EREV_CHANUKAH && state.specialHoliday != PURIM && state.specialHoliday != EREV_PURIM) {
+    boolean rabbinical = isRabbinicalHoliday(state.specialHoliday)
+    if (state.specialHoliday != SUKKOT && !rabbinical) {
         nextSpecialHoliday = null
     }
     
     setSpecialHoliday(nextSpecialHoliday)
-    if (fireEvent)
+    if (fireEvent && !rabbinical)
         fireSpecialHolidayEvent(nextSpecialHoliday)
 }
 
