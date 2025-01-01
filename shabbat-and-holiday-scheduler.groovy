@@ -5,6 +5,7 @@ import java.util.Calendar
 import java.util.HashMap
 import java.util.HashSet
 import java.util.concurrent.ConcurrentHashMap
+import java.util.regex.*
 import java.util.Random
 import java.util.TimeZone
 import java.text.SimpleDateFormat
@@ -49,6 +50,8 @@ import java.text.SimpleDateFormat
 @Field static final Random random = new Random()
 
 @Field static final Set fetchInProgress = new HashSet<>()
+
+@Field static final Pattern CHANUKAH_PATTERN = Pattern.compile("Chanukah: (\\d)")
 
 metadata {
  	definition (name: "Shabbat and Holiday Scheduler", namespace: "shabbatmode", author: "Daniel Segall") {
@@ -362,17 +365,28 @@ def scheduleUpdater(response, data) {
                     boolean firstDayOfChanukah = chanukah && item.title.contains("1")
                     Date eventDate = toDateTime(item.date)
                     if (erev || chanukah || purim) {
-                        if (firstDayOfChanukah) {
-                            eventList.add(eventList.size(), [type: item.category, name: EREV_CHANUKAH, when: atMidnight(eventDate)])
+                        int dayOfChanukah = -1
+                        if (chanukah) {
+                            Matcher cm = CHANUKAH_PATTERN.matcher(item.title)
+                            boolean matches = cm.find()
+                            if (matches) {
+                                dayOfChanukah = Integer.parseInt(cm.group(1))
+                            }
+                            
+                            if (debugLogging) log.debug "Day of Chanukah: ${dayOfChanukah}"
                         }
                         
-                        eventList.add([type: item.category, name: chanukah ? CHANUKAH : item.title, when: eventDate])
+                        if (firstDayOfChanukah) {
+                            eventList.add(eventList.size(), [type: item.category, name: EREV_CHANUKAH, when: atMidnight(eventDate), holidayDay: dayOfChanukah])
+                        }
+                        
+                        eventList.add([type: item.category, name: chanukah ? CHANUKAH : item.title, when: eventDate, holidayDay: dayOfChanukah])
                         
                         if (purim && !erev) {
                             eventList.add([type: item.category, name: PURIM_END, when: addDays(eventDate, 1)])
                         }
                         else if (chanukah) {
-                            if (item.title.contains("8")) {
+                            if (dayOfChanukah == 8) {
                                 eventList.add([type: item.category, name: CHANUKAH_END, when: addDays(eventDate, 1)])
                             }
                         }
@@ -519,9 +533,12 @@ def incrementForcedDate() {
     }
 }
 
-def setSpecialHoliday(name) {
-    if (debugLogging) log.debug "setSpecialHoliday old=${state.specialHoliday} new=${name}"
-    if (state.specialHoliday != name) {
+def setSpecialHoliday(name, int holidayDay=-1) {
+    if (debugLogging) log.debug "setSpecialHoliday old=${state.specialHoliday} new=${name} day=${holidayDay}"
+    if (holidayDay != null && holidayDay > 0) {
+        state.holidayDay = holidayDay
+    }
+    else if (state.specialHoliday != name) {
         state.holidayDay = -1
     }
     
@@ -595,15 +612,16 @@ def scheduleNextShabbatEvent() {
             else if (data.name.contains(PURIM) || data.name.contains(CHANUKAH)) {
                 boolean start = !data.name.contains("Over")
                 String actualHolidayName = data.name
-                if (start) {
-                    setSpecialHoliday(actualHolidayName)
-                }
-                else {
-                    actualHolidayName = actualHolidayName.substring(0, actualHolidayName.indexOf(" "))
-                    setSpecialHoliday(null)
-                }
                 
                 if (old) {
+                    if (start) {
+                        setSpecialHoliday(actualHolidayName, data.holidayDay)
+                    }
+                    else {
+                        actualHolidayName = actualHolidayName.substring(0, actualHolidayName.indexOf(" "))
+                        setSpecialHoliday(null)
+                    }
+                    
                     fireSpecialHolidayEvent(start ? actualHolidayName : null)
                 }
                 else {
@@ -671,7 +689,7 @@ def scheduleRabbinicalHoliday(holiday, String actualName, boolean start) {
     String scheduleStr = calendarToCron(cal)
                 
     if (debugLogging) {
-        log.debug "holiday cron string for ${holiday.name} is ${scheduleStr}"
+        log.debug "scheduling Rabbinical holiday for ${holiday} at ${scheduleStr}"
     }
     
     long currentTime = now()
@@ -679,12 +697,12 @@ def scheduleRabbinicalHoliday(holiday, String actualName, boolean start) {
         fireSpecialHolidayEvent(actualName)
     }
     else {
-    	schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: ["name":actualName]])
+    	schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: ["name":actualName, "currentDay":holiday.holidayDay]])
     }
 }
 
 def updateSpecialHoliday(data) {
-    fireSpecialHolidayEvent(data.name)
+    fireSpecialHolidayEvent(data.name, data.currentDay)
 }
 
 def schedulePendingEvent() {
@@ -890,17 +908,22 @@ void specialHolidayEnd(boolean fireEvent = true) {
         fireSpecialHolidayEvent(nextSpecialHoliday)
 }
 
-void fireSpecialHolidayEvent(String nextSpecialHoliday) {
+void fireSpecialHolidayEvent(String nextSpecialHoliday, int currentDay=-1) {
     if (debugLogging) log.debug "fireSpecialHolidayEvent ${nextSpecialHoliday}"
     if (nextSpecialHoliday == null || nextSpecialHoliday.isEmpty()) {
         state.holidayDay = -1
         sendEventIfNotFetching("name": "specialHoliday", "value": NONE)
     }
     else {
-        if (state.holidayDay <= 0)
-            state.holidayDay = 1
-        else
-            state.holidayDay++
+        if (currentDay <= 0) {
+            if (state.holidayDay <= 0)
+                state.holidayDay = 1
+            else
+                state.holidayDay++
+        }
+        else {
+            state.holidayDay = currentDay
+        }
             
         sendEventIfNotFetching("name": "specialHoliday", "value": nextSpecialHoliday)
     }
