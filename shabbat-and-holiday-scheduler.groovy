@@ -908,14 +908,14 @@ void specialHolidayEnd(boolean fireEvent = true) {
         fireSpecialHolidayEvent(nextSpecialHoliday)
 }
 
-void fireSpecialHolidayEvent(String nextSpecialHoliday, int currentDay=-1) {
+void fireSpecialHolidayEvent(String nextSpecialHoliday, Integer currentDay=null) {
     if (debugLogging) log.debug "fireSpecialHolidayEvent ${nextSpecialHoliday}"
     if (nextSpecialHoliday == null || nextSpecialHoliday.isEmpty()) {
         state.holidayDay = -1
         sendEventIfNotFetching("name": "specialHoliday", "value": NONE)
     }
     else {
-        if (currentDay <= 0) {
+        if (currentDay == null || currentDay <= 0) {
             if (state.holidayDay <= 0)
                 state.holidayDay = 1
             else
