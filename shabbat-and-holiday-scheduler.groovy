@@ -123,6 +123,9 @@ def createStateMap() {
     
     if (state.eventList == null)
         state.eventList = new ArrayList()
+    
+    if (state.pendingRabbinicalHolidays == null)
+    	state.pendingRabbinicalHolidays = new HashMap()
 }
  
  def initialize() {
@@ -159,6 +162,7 @@ def createStateMap() {
          
          try {
              schedulePendingEvent()
+             schedulePendingRabbinicalHolidays()
          }
          finally {
              scheduleFetchTask()
@@ -697,12 +701,19 @@ def scheduleRabbinicalHoliday(holiday, String actualName, boolean start) {
         fireSpecialHolidayEvent(actualName)
     }
     else {
-    	schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: ["name":actualName, "currentDay":holiday.holidayDay]])
+        Map dataMap = ["name":actualName, "currentDay":holiday.holidayDay]
+        state.pendingRabbinicalHolidays.put(dataMap, scheduleStr)
+    	schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: dataMap])
     }
 }
 
 def updateSpecialHoliday(data) {
+    state.pendingRabbinicalHolidays.remove(data)
     fireSpecialHolidayEvent(data.name, data.currentDay)
+}
+
+def schedulePendingRabbinicalHolidays() {
+    state.pendingRabbinicalHolidays.each{ key, val -> schedule(val, updateSpecialHoliday, [overwrite: false, data: key]) }
 }
 
 def schedulePendingEvent() {
@@ -930,6 +941,7 @@ void fireSpecialHolidayEvent(String nextSpecialHoliday, Integer currentDay=null)
     
     if (debugLogging) log.debug "fireSpecialHolidayEvent ${nextSpecialHoliday} holidayDay=${state.holidayDay}"
     sendEventIfNotFetching("name": "holidayDay", "value": state.holidayDay)
+    if (isRabbinicalHoliday(nextSpecialHoliday)) updateActiveTime(getActiveType(), false, nextSpecialHoliday)
 }
 
 def havdalahMade() {
@@ -1008,11 +1020,11 @@ def removePreviousType(key) {
     state.savedTypes[key] = null
 }
 
-def updateActiveTime(type, boolean forceReschedule = true) {
+def updateActiveTime(type, boolean forceReschedule = true, currentSpecialHoliday = null) {
     if (debugLogging) log.debug "updateActiveTime, forceReschedule=${forceReschedule}"
     Calendar regular = regularTimeOnCalendar()
     if (regular != null) {
-        updateActiveTime(type, regular, false)
+        updateActiveTime(type, regular, false, currentSpecialHoliday)
         if (!state.initializing && forceReschedule) {
             if (debugLogging) log.debug "updateActiveTime scheduling pending event"
             schedulePendingEvent()
@@ -1024,7 +1036,7 @@ def updateActiveTime(type, boolean forceReschedule = true) {
     else if (debugLogging) log.debug "updateActiveTime no regular time available yet, not scheduling event"
 }
 
-def updateActiveTime(type, regular, boolean timeChanged = true) {
+def updateActiveTime(type, regular, boolean timeChanged = true, currentSpecialHoliday = null) {
     int regMin = regular.get(Calendar.MINUTE)
     double regFraction = (double)regMin / 60
     int regPct = Math.floor(regFraction * 100)
@@ -1068,9 +1080,11 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     
     int codeDiff = earlyTimeCode - time
     
+    if (currentSpecialHoliday == null) currentSpecialHoliday = device.currentValue("specialHoliday")
+    
     if (debugLogging) {
         log.debug "Early time code is " + earlyTimeCode
-        log.debug "codeDiff=${codeDiff}"
+        log.debug "codeDiff=${codeDiff}, specialHoliday=${currentSpecialHoliday}"
     }
     
     if (codeDiff > 0) {
@@ -1081,7 +1095,7 @@ def updateActiveTime(type, regular, boolean timeChanged = true) {
     def eventDay = regular.get(Calendar.DAY_OF_WEEK)
     
     // A code diff of 17 corresponds to about 10 minutes
-    boolean earlyOption = codeDiff <= 17 && eventDay == 6 && (state.specialHoliday == null || state.specialHoliday == PURIM || state.specialHoliday == EREV_PURIM)
+    boolean earlyOption = eventDay == 6 && ((codeDiff <= 17 && currentSpecialHoliday == null) || currentSpecialHoliday == PURIM || currentSpecialHoliday == EREV_PURIM)
     if (earlyOption) {
         if (timeChanged && prevEarlyOption != null && prevEarlyOption.booleanValue() != earlyOption) {
             type = getPreviousType(SEASONAL)
