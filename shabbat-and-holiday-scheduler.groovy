@@ -1080,6 +1080,7 @@ def updateActiveTime(type, regular, boolean timeChanged = true, currentSpecialHo
     
     int codeDiff = earlyTimeCode - time
     
+    if (currentSpecialHoliday == null) currentSpecialHoliday = state.specialHoliday
     if (currentSpecialHoliday == null) currentSpecialHoliday = device.currentValue("specialHoliday")
     
     if (debugLogging) {
