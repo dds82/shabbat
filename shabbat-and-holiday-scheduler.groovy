@@ -211,6 +211,7 @@ void resetData() {
     state.expectEmptyList = true
     state.eventList = null
     state.nextEventTime = null
+    state.pendingRabbinicalHolidays = null
 }
 
 def configure() {
@@ -693,27 +694,44 @@ def scheduleRabbinicalHoliday(holiday, String actualName, boolean start) {
     String scheduleStr = calendarToCron(cal)
                 
     if (debugLogging) {
-        log.debug "scheduling Rabbinical holiday for ${holiday} at ${scheduleStr}"
+        log.debug "scheduling Rabbinical holiday for ${holiday} at ${scheduleStr}, data=${holiday}"
     }
     
-    long currentTime = now()
-    if (when.getTime() < currentTime) {
+    long realTime = now()
+    long currentTime = state.timeOverride == null ? realTime : state.timeOverride
+    if (when.getTime() <= currentTime) {
         fireSpecialHolidayEvent(actualName)
     }
     else {
         Map dataMap = ["name":actualName, "currentDay":holiday.holidayDay]
-        state.pendingRabbinicalHolidays.put(dataMap, scheduleStr)
-    	schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: dataMap])
+        Map persistMap = [*:holiday, "start":start, "actualName": actualName]
+        def holidayKey = specialHolidayKey(actualName, holiday.holidayDay)
+        if (debugLogging) log.debug("scheduleRabbinicalHoliday storing ${holidayKey}=${persistMap}")
+        state.pendingRabbinicalHolidays.put(holidayKey, persistMap)
+        if (when.getTime() > realTime) // The scheduler will throw exceptions if you try to schedule an event in the past, so it doesn't work with time overrides
+    		schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: dataMap])
     }
 }
 
+def specialHolidayKey(actualName, currentDay) {
+    return actualName + ":" + currentDay
+}
+
 def updateSpecialHoliday(data) {
-    state.pendingRabbinicalHolidays.remove(data)
+    def holidayKey = specialHolidayKey(data.name, data.currentDay)
+    if (debugLogging) log.debug("updateSpecialHoliday removing ${holidayKey}")
+    state.pendingRabbinicalHolidays.remove(holidayKey)
     fireSpecialHolidayEvent(data.name, data.currentDay)
 }
 
 def schedulePendingRabbinicalHolidays() {
-    state.pendingRabbinicalHolidays.each{ key, val -> schedule(val, updateSpecialHoliday, [overwrite: false, data: key]) }
+    state.pendingRabbinicalHolidays.each{ key, val -> 
+        if (debugLogging) {
+            log.debug "schedulePendingRabbinicalHolidays, ${key}=${val}"
+        }
+        
+        scheduleRabbinicalHoliday(val, val.actualName, val.start as boolean)
+    }
 }
 
 def schedulePendingEvent() {
