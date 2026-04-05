@@ -707,7 +707,9 @@ def scheduleRabbinicalHoliday(holiday, String actualName, boolean start) {
         Map persistMap = [*:holiday, "start":start, "actualName": actualName]
         def holidayKey = specialHolidayKey(actualName, holiday.holidayDay)
         if (debugLogging) log.debug("scheduleRabbinicalHoliday storing ${holidayKey}=${persistMap}")
-        state.pendingRabbinicalHolidays.put(holidayKey, persistMap)
+        def tempMap = state.pendingRabbinicalHolidays
+        tempMap.put(holidayKey, persistMap)
+        state.pendingRabbinicalHolidays = tempMap
         if (when.getTime() > realTime) // The scheduler will throw exceptions if you try to schedule an event in the past, so it doesn't work with time overrides
     		schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: dataMap])
     }
@@ -720,7 +722,9 @@ def specialHolidayKey(actualName, currentDay) {
 def updateSpecialHoliday(data) {
     def holidayKey = specialHolidayKey(data.name, data.currentDay)
     if (debugLogging) log.debug("updateSpecialHoliday removing ${holidayKey}")
-    state.pendingRabbinicalHolidays.remove(holidayKey)
+    def tempMap = state.pendingRabbinicalHolidays
+    tempMap.remove(holidayKey)
+    state.pendingRabbinicalHolidays = tempMap
     fireSpecialHolidayEvent(data.name, data.currentDay)
 }
 
@@ -945,7 +949,7 @@ void fireSpecialHolidayEvent(String nextSpecialHoliday, Integer currentDay=null)
     }
     else {
         if (currentDay == null || currentDay <= 0) {
-            if (state.holidayDay <= 0)
+            if (state.holidayDay <= 0 || state.specialHoliday != nextSpecialHoliday)
                 state.holidayDay = 1
             else
                 state.holidayDay++
