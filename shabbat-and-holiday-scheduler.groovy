@@ -1183,9 +1183,7 @@ String declareJavascriptFunction(deviceid, String command) {
     if (debugLogging)
         log.debug "urlBuilder length = " + urlBuilder.length()
     
-    String s = urlBuilder + "h=new XMLHttpRequest();"
-    s += "h.open(\"GET\",l+\"?access_token=" + accessToken + "\", true);"
-    s += "h.send();"
+    String s = urlBuilder + "fetch(l+\"?access_token=" + accessToken + "\");"
     
     if (debugLogging)
         log.debug "s length = " + s.length()
@@ -1222,7 +1220,7 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
             text += headerBegin
         else
             text += dimBegin
-        text += "P: " + sdf.format(new Date(plagTime))
+        text += "Plag: " + sdf.format(new Date(plagTime))
         if (activeType == "Plag")
             text += headerEnd
         else
@@ -1235,7 +1233,7 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
             text += headerBegin
         else
             text += dimBegin
-        text += "E: " + sdf.format(new Date(earlyTime))
+        text += "Early: " + sdf.format(new Date(earlyTime))
         if (activeType == "Early")
             text += headerEnd
         else
@@ -1248,7 +1246,7 @@ def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regular
             text += headerBegin
         else
             text += dimBegin
-        text += "Z: " + sdf.format(new Date(regularTime))
+        text += "Zman: " + sdf.format(new Date(regularTime))
         if (activeType == "Regular")
             text += headerEnd
         else
