@@ -1169,109 +1169,66 @@ def updateActiveTime(type, regular, boolean timeChanged = true, currentSpecialHo
     sendEventIfNotFetching("name":"activeTimeForDisplay", "value":activeTime ? sdf.format(activeTime instanceof Date ? activeTime : new Date(activeTime)) : "")
 }
 
+// Uses the hyper-minified JS ternary function to guarantee 1024 char limit is met.
 String declareJavascriptFunction(deviceid, String command) {
-    String urlBuilder = "a=\"" + makerApiAppID + "\";"
-    urlBuilder += "l=window.location.origin;"
-    urlBuilder += "if (l.includes(\"cloud.hubitat.com\")) {"
-    urlBuilder += "l+=\"/api/" + hubUUID + "/apps/\"+a;"
-    urlBuilder += "}"
-    urlBuilder += "else {"
-    urlBuilder += "l+=\"/apps/api/\"+a;"
-    urlBuilder += "}"
-    urlBuilder += "l+=\"/devices/" + deviceid + "/"+ command + "\";"
-    
-    if (debugLogging)
-        log.debug "urlBuilder length = " + urlBuilder.length()
-    
-    String s = urlBuilder + "fetch(l+\"?access_token=" + accessToken + "\");"
+    String s = "l=window.location.origin;fetch(l+(l.includes('cloud')?'/api/" + hubUUID + "/apps/" + makerApiAppID + "':'/apps/api/" + makerApiAppID + "')+'/devices/" + deviceid + "/" + command + "?access_token=" + accessToken + "');"
     
     if (debugLogging)
         log.debug "s length = " + s.length()
-    
+        
     return s
 }
 
-String clickableBegin(String command) {
-    if (makerApiAppID != null && hubUUID != null && accessToken != null)
-        return "<div onclick='javascript:" + declareJavascriptFunction(device.id, command) + "'>"
-    
-    return "<div>"
-}
-
 def updateTimes(boolean earlyOption, long earlyTime, long plagTime, long regularTime, String activeType) {
-    def times
+    String times = ""
     
-    final String clickableEnd = "</div>"
+    // Check the hub's locale settings for 24-hour vs 12-hour time format
+    boolean is24 = (location?.timeFormat == "24")
     
-    final String headerBegin = "<span style=\"border:2px outset\">"
-    final String headerEnd = "</span>"
-    
-    final String dimBegin = ""
-    final String dimEnd = ""
-        
     if (earlyOption) {
         SimpleDateFormat smf = new SimpleDateFormat("MMM dd")
-        SimpleDateFormat sdf = new SimpleDateFormat("h:mm")
+        // Switch to HH:mm for 24-hour locales
+        SimpleDateFormat sdf = new SimpleDateFormat(is24 ? "HH:mm" : "h:mm")
         
-        // For the month and day, it doesn't matter which date is formatted
-        String text = smf.format(new Date(plagTime)) + "<br/>"
-        text += clickableBegin("plag")
-        if (activeType == "Plag")
-            text += headerBegin
-        else
-            text += dimBegin
-        text += "Plag: " + sdf.format(new Date(plagTime))
-        if (activeType == "Plag")
-            text += headerEnd
-        else
-            text += dimEnd
+        times = smf.format(new Date(plagTime)) + "<br/>"
         
-        text += clickableEnd
+        String js = ""
+        if (makerApiAppID != null && hubUUID != null && accessToken != null) {
+            js = " onclick=\"let t=event.target.closest('tr');if(t&&t.id)fetch((location.host.includes('cloud')?'/api/${hubUUID}/apps/':'/apps/api/')+'${makerApiAppID}/devices/${device.id}/'+t.id+'?access_token=${accessToken}')\""
+        }
         
-        text += clickableBegin("early")
-        if (activeType == "Early")
-            text += headerBegin
-        else
-            text += dimBegin
-        text += "Early: " + sdf.format(new Date(earlyTime))
-        if (activeType == "Early")
-            text += headerEnd
-        else
-            text += dimEnd
+        times += "<table style=\"margin:4px auto 0;border-collapse:collapse;line-height:1.2\"${js}>"
         
-        text += clickableEnd
+        def makeRow = { String id, String label, long time, boolean active ->
+            String style = active ? " style=\"border:2px outset\"" : ""
+            return "<tr id=\"${id}\"${style}><td align=\"right\" style=\"padding:0 4px\">${label}:</td><td style=\"padding:0 4px\">${sdf.format(new Date(time))}</td></tr>"
+        }
         
-        text += clickableBegin("regular")
-        if (activeType == "Regular")
-            text += headerBegin
-        else
-            text += dimBegin
-        text += "Zman: " + sdf.format(new Date(regularTime))
-        if (activeType == "Regular")
-            text += headerEnd
-        else
-            text += dimEnd
+        times += makeRow("plag", "Plag", plagTime, activeType == "Plag")
+        times += makeRow("early", "Early", earlyTime, activeType == "Early")
+        times += makeRow("regular", "Zman", regularTime, activeType == "Regular")
         
-        text += clickableEnd
-        
-        times = text
+        times += "</table>"
     }
     else {
-        String text = state.specialHoliday
-        if (text != null && text != CHANUKAH && text != PURIM && text != EREV_PURIM) {
-            text += ": "
+        String label = state.specialHoliday
+        if (label != null && label != CHANUKAH && label != PURIM && label != EREV_PURIM) {
+            label += ":"
+        } else {
+            label = ""
         }
-        else text = ""
         
         SimpleDateFormat smf = new SimpleDateFormat("EEE MMM dd")
-        SimpleDateFormat sdf = new SimpleDateFormat("h:mm a")
-        text += smf.format(new Date(regularTime)) + "<br/><br/>"
-        text += sdf.format(new Date(regularTime))
-        times = text
+        // Switch to HH:mm for 24-hour locales, otherwise keep the AM/PM (a) for 12-hour
+        SimpleDateFormat sdf = new SimpleDateFormat(is24 ? "HH:mm" : "h:mm a")
+        
+        times = smf.format(new Date(regularTime)) + "<br/>"
+        times += "<table style=\"margin:4px auto 0;border-collapse:collapse;line-height:1.2\">"
+        times += "<tr><td align=\"right\" style=\"padding:0 4px\">${label}</td><td style=\"padding:0 4px\">${sdf.format(new Date(regularTime))}</td></tr>"
+        times += "</table>"
     }
     
-    if (debugLogging)
-        log.debug "Times length = " + times.length()
+    if (debugLogging) log.debug "Times length = ${times.length()}"
     
     sendEventIfNotFetching("name":"times", "value": times)
 }
