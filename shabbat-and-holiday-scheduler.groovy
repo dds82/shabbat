@@ -54,7 +54,7 @@ import java.text.SimpleDateFormat
 @Field static final Pattern CHANUKAH_PATTERN = Pattern.compile("Chanukah: (\\d)")
 
 metadata {
- 	definition (name: "Shabbat and Holiday Scheduler", namespace: "shabbatmode", author: "Daniel Segall") {
+    definition (name: "Shabbat and Holiday Scheduler", namespace: "shabbatmode", author: "Daniel Segall") {
         capability "Actuator"
         capability "PushableButton"
         capability "Configuration"
@@ -80,8 +80,8 @@ metadata {
         command "forceHoliday", [[name:"Holiday", type:"ENUM", constraints:[NONE, PESACH, SHAVUOT, SUKKOT, ROSH_HASHANA, YOM_KIPPUR, SHMINI_ATZERET]]]
         command "forceDate", [[name: "Year*", type:"STRING"], [name: "Month*", type:"STRING"], [name: "Day*", type:"STRING"]]
         command "incrementForcedDate"
-     }
- }
+    }
+}
 
 preferences
 {
@@ -92,7 +92,7 @@ preferences
         input name: "earlyShabbatTime", type: "time", title: "Time for Early Shabbat", required: true, defaultValue: "19:00", description: "The time for \"Early\" Shabbat which does not change each week"
         input name: "startMode", type: "enum", title: "Mode at Shabbat Start", required:true, options: getModeOptions(), defaultValue: "Shabbat"
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
-        input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: "Away"
+        input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, multiple: true, defaultValue: ["Away"]
         input name: "israel", type: "bool", title: "Israeli Yom Tov Schedule", defaultValue: false
         input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this much time", required: false, defaultValue: 60, description: "Enter minutes, or 0 to disable this feature"
         input name: "preferredTime", type: "enum", title: "Preferred Shabbat Time", options: [PLAG, EARLY, REGULAR], description: "Preferred time to make Shabbat", defaultValue: REGULAR
@@ -113,70 +113,79 @@ List<String> getModeOptions() {
     return options
 }
 
+boolean isNotWhenMode() {
+    if (notWhen == null) return false
+    String currentMode = location.getMode()
+    if (notWhen instanceof List) {
+        return ((List) notWhen).contains(currentMode)
+    }
+    return currentMode == notWhen.toString()
+}
+
 def installed() {
     fullReset()
 }
 
 def createStateMap() {
     if (state.savedTypes == null)
-         state.savedTypes = new HashMap()
+        state.savedTypes = new HashMap()
     
     if (state.eventList == null)
         state.eventList = new ArrayList()
     
     if (state.pendingRabbinicalHolidays == null)
-    	state.pendingRabbinicalHolidays = new HashMap()
+        state.pendingRabbinicalHolidays = new HashMap()
 }
- 
- def initialize() {
-     doUnschedule()
-     createStateMap()
-     
-     boolean refetch = false
-     if (state.nextEventTime == null) {
-         if (debugLogging)
-             log.debug "initialize(), state has no next event time, re-fetching"
-         
-         refetch = true
-     }
-     else if (state.eventList == null || state.eventList.isEmpty()) {
-         Date pendingEvent = objectToDateTime(state.nextEventTime)
-         if (pendingEvent != null && pendingEvent.getTime() > now()) {
-             if (debugLogging)
-                 log.debug "initialize(), state event list has no data but pending event is in the future, not re-fetching"
-         }
-         else {
-             if (debugLogging)
-                 log.debug "initialize(), state event list has no data, re-fetching"
-         
-             refetch = true
-         }
-     }
-     
-     if (refetch) {
-         fetchSchedule()
-     }
-     else {
-         if (debugLogging)
-             log.debug "initialize(), state event list has data, not re-fetching"
-         
-         try {
-             schedulePendingEvent()
-             schedulePendingRabbinicalHolidays()
-         }
-         finally {
-             scheduleFetchTask()
-         }
-     }
- }
+
+def initialize() {
+    doUnschedule()
+    createStateMap()
+    
+    boolean refetch = false
+    if (state.nextEventTime == null) {
+        if (debugLogging)
+            log.debug "initialize(), state has no next event time, re-fetching"
+        
+        refetch = true
+    }
+    else if (state.eventList == null || state.eventList.isEmpty()) {
+        Date pendingEvent = objectToDateTime(state.nextEventTime)
+        if (pendingEvent != null && pendingEvent.getTime() > now()) {
+            if (debugLogging)
+                log.debug "initialize(), state event list has no data but pending event is in the future, not re-fetching"
+        }
+        else {
+            if (debugLogging)
+                log.debug "initialize(), state event list has no data, re-fetching"
+        
+            refetch = true
+        }
+    }
+    
+    if (refetch) {
+        fetchSchedule()
+    }
+    else {
+        if (debugLogging)
+            log.debug "initialize(), state event list has data, not re-fetching"
+        
+        try {
+            schedulePendingEvent()
+            schedulePendingRabbinicalHolidays()
+        }
+        finally {
+            scheduleFetchTask()
+        }
+    }
+}
 
 def scheduleFetchTask() {
     String scheduleStr = String.format("%d %d %d 1 1 ?", random.nextInt(60), random.nextInt(59) + 1, random.nextInt(6))
-     if (debugLogging)
-         log.debug "schedule fetcher cron string is " + scheduleStr
-     
-     schedule(scheduleStr, fetchSchedule, [overwrite: true])
- }
+    if (debugLogging)
+        log.debug "schedule fetcher cron string is " + scheduleStr
+    
+    schedule(scheduleStr, fetchSchedule, [overwrite: true])
+}
 
 def refresh() {
     fullReset()
@@ -223,7 +232,7 @@ def updated() {
         refresh()
     else
         initialize()
- }
+}
 
 def uninstalled() {
     doUnschedule()
@@ -312,14 +321,14 @@ def fetchSchedule(String testEventType=null, int testEventDelay=-1, String testH
 Date addDays(Date date, int num) {
     Calendar offsetCal = Calendar.getInstance()
     offsetCal.setTime(date)
-	offsetCal.add(Calendar.DAY_OF_MONTH, num)
+    offsetCal.add(Calendar.DAY_OF_MONTH, num)
     return offsetCal.getTime()
 }
 
 Date atMidnight(Date date) {
     Calendar offsetCal = Calendar.getInstance()
     offsetCal.setTime(date)
-	offsetCal.set(Calendar.MILLISECOND, 0)
+    offsetCal.set(Calendar.MILLISECOND, 0)
     offsetCal.set(Calendar.SECOND, 0)
     offsetCal.set(Calendar.MINUTE, 0)
     offsetCal.set(Calendar.HOUR_OF_DAY, 0)
@@ -446,7 +455,7 @@ def scheduleUpdater(response, data) {
         }
         
         state.fetching = false
-        if (state.modeAfterFetch != null && (notWhen == null || location.getMode() != notWhen)) {
+        if (state.modeAfterFetch != null && !isNotWhenMode()) {
             if (location.getMode() != state.modeAfterFetch) {
                 log.info "Setting mode after fetch to ${state.modeAfterFetch}"
                 doSetMode(state.modeAfterFetch)
@@ -518,7 +527,7 @@ def incrementForcedDate() {
         Date newTime = cal.getTime()
         state.timeOverride = newTime.getTime()
         
-         Object nextEventTime = state.nextEventTime
+        Object nextEventTime = state.nextEventTime
         if (!(nextEventTime instanceof Date))
             nextEventTime = toDateTime(nextEventTime.toString())
         
@@ -711,7 +720,7 @@ def scheduleRabbinicalHoliday(holiday, String actualName, boolean start) {
         tempMap.put(holidayKey, persistMap)
         state.pendingRabbinicalHolidays = tempMap
         if (when.getTime() > realTime) // The scheduler will throw exceptions if you try to schedule an event in the past, so it doesn't work with time overrides
-    		schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: dataMap])
+            schedule(scheduleStr, updateSpecialHoliday, [overwrite: false, data: dataMap])
     }
 }
 
@@ -843,7 +852,7 @@ String calendarToCron(Calendar cal) {
 }
 
 def shabbatStart() {
-    if (notWhen != null && location.getMode() != notWhen) {
+    if (!isNotWhenMode()) {
         log.info "shabbatStart holiday=${state.specialHoliday}"
         
         if (location.getMode() != startMode) {
@@ -862,7 +871,7 @@ def shabbatStart() {
     }
     else {
         if (debugLogging)
-            log.debug "Not setting mode to " + startMode + " because mode is " + notWhen
+            log.debug "Not setting mode to " + startMode + " because mode is in " + notWhen
     }
     
     shabbatEventTriggered()
@@ -871,7 +880,7 @@ def shabbatStart() {
 void specialHolidayStart() {
     updateSpecialShabbat()
     if (!isRabbinicalHoliday(state.specialHoliday))
-    	fireSpecialHolidayEvent(state.specialHoliday)
+        fireSpecialHolidayEvent(state.specialHoliday)
 }
 
 void updateSpecialShabbat(boolean fireEvent = true) {
@@ -889,7 +898,7 @@ void updateSpecialShabbat(boolean fireEvent = true) {
 
 def shabbatEnd() {
     String aish = HAVDALAH_NO_FIRE     
-    boolean unset = location.getMode() != endMode && (notWhen == null || location.getMode() != notWhen)
+    boolean unset = location.getMode() != endMode && !isNotWhenMode()
     
     if (state.fetching) {
         log.info "Fetching, recording mode end ${endMode}"
