@@ -92,7 +92,7 @@ preferences
         input name: "earlyShabbatTime", type: "time", title: "Time for Early Shabbat", required: true, defaultValue: "19:00", description: "The time for \"Early\" Shabbat which does not change each week"
         input name: "startMode", type: "enum", title: "Mode at Shabbat Start", required:true, options: getModeOptions(), defaultValue: "Shabbat"
         input name: "endMode", type: "enum", title: "Mode at Shabbat End", required: true, options: getModeOptions(), defaultValue: "Home"
-        input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, multiple: true, defaultValue: ["Away"]
+        input name: "notWhen", type: "enum", title: "Don't go into Shabbat mode if mode is...", options: getModeOptions(), required: false, defaultValue: ["Away"]
         input name: "israel", type: "bool", title: "Israeli Yom Tov Schedule", defaultValue: false
         input name: "ignoreHavdalahOnFireAfter", type: "number", title: "Assume Havdalah has already been made after this much time", required: false, defaultValue: 60, description: "Enter minutes, or 0 to disable this feature"
         input name: "preferredTime", type: "enum", title: "Preferred Shabbat Time", options: [PLAG, EARLY, REGULAR], description: "Preferred time to make Shabbat", defaultValue: REGULAR
@@ -114,12 +114,15 @@ List<String> getModeOptions() {
 }
 
 boolean isNotWhenMode() {
-    if (notWhen == null) return false
     String currentMode = location.getMode()
-    if (notWhen instanceof List) {
-        return ((List) notWhen).contains(currentMode)
+    
+    // Fallback: If the user hasn't clicked "Save Preferences" yet, default to "Away"
+    if (settings.notWhen == null) {
+        return currentMode == "Away"
     }
-    return currentMode == notWhen.toString()
+    
+    // Compare current mode to the saved preference
+    return currentMode == settings.notWhen.toString()
 }
 
 def installed() {
